@@ -1,0 +1,13 @@
+[package]
+name = "client"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+sim = {path = "../sim"}
+gfx = {path = "../gfx"}
+util = {path = "../../core/util"}
+ash = "0.29"
+anyhow = "1.0"

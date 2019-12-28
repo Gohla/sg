@@ -1,0 +1,47 @@
+cargo-features = ["named-profiles", "profile-overrides"]
+
+[workspace]
+members = [
+  "code/game/sim",
+  "code/game/gfx",
+  "code/game/client",
+  "code/core/vk",
+  "code/core/util",
+]
+
+# Development (builtin & default) profile: fastest code generation.
+[profile.dev]
+opt-level = 2
+overflow-checks = true
+debug-assertions = true
+panic = "abort"
+debug = false
+codegen-units = 8
+lto = false
+incremental = true
+# Fully optimize all dependencies, but not our own crates.
+[profile.dev.overrides."*"]
+opt-level = 3
+[profile.dev.overrides."sim"]
+opt-level = 2
+[profile.dev.overrides."gfx"]
+opt-level = 2
+[profile.dev.overrides."client"]
+opt-level = 2
+[profile.dev.overrides."vk"]
+opt-level = 2
+[profile.dev.overrides."util"]
+opt-level = 2
+
+# Release (builtin) profile: fastest runtime.
+[profile.release]
+opt-level = 3
+overflow-checks = false
+debug-assertions = false
+lto = true
+debug = false
+
+# Debugging (custom) profile (cannot be called debug): include debugging information.
+[profile.dbg]
+inherits = 'dev'
+debug = true

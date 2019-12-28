@@ -1,0 +1,10 @@
+[package]
+name = "sim"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+util = {path = "../../core/util"}
+legion = "0.2"

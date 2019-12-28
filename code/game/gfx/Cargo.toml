@@ -1,0 +1,11 @@
+[package]
+name = "gfx"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+vk = {path = "../../core/vk"}
+util = {path = "../../core/util"}
+anyhow = "1.0"

@@ -1,0 +1,19 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 2
+indent_style = space
+insert_final_newline = true
+max_line_length = 120
+tab_width = 2
+ij_continuation_indent_size = 2
+ij_formatter_off_tag = @formatter:off
+ij_formatter_on_tag = @formatter:on
+ij_formatter_tags_enabled = true
+
+[*.rs]
+ij_rust_keep_blank_lines_in_code = 2
+ij_rust_keep_blank_lines_in_declarations = 2
+ij_rust_keep_line_breaks = true
