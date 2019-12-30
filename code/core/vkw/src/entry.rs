@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::ffi::{CStr, CString, IntoStringError, NulError};
+use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 
@@ -110,14 +110,8 @@ impl Default for InstanceFeaturesQuery {
 
 #[derive(Error, Debug)]
 pub enum InstanceCreateError {
-  #[error("Failed to convert application name into a C-String")]
-  ApplicationNameConvertFail(#[source] NulError),
-  #[error("Failed to convert engine name into a C-String")]
-  EngineNameConvertFail(#[source] NulError),
   #[error("Failed to enumerate instance layer properties")]
   EnumerateLayerFail(#[source] VulkanError),
-  #[error("Failed to convert a layer name into a String")]
-  LayerNameConvertToStringFail(#[source] IntoStringError),
   #[error("One or more required instance layers are missing: {0:?}")]
   RequiredLayersMissing(Vec<CString>),
   #[error("Failed to enumerate instance extension properties")]
