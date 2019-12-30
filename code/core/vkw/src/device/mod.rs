@@ -16,6 +16,10 @@ use thiserror::Error;
 use crate::instance::Instance;
 use crate::instance::surface_extension::Surface;
 
+pub mod swapchain_extension;
+
+// Wrapper
+
 #[derive(Debug)]
 pub struct DeviceFeatures {
   enabled_extensions: HashSet<CString>,

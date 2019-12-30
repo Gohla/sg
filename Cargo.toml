@@ -9,7 +9,7 @@ members = [
   "code/core/util",
 ]
 
-# Development (builtin & default) profile: fastest code generation.
+# Development (builtin & default) profile: debug assertions + fastest code generation.
 [profile.dev]
 opt-level = 2
 overflow-checks = true
@@ -41,7 +41,7 @@ debug-assertions = false
 lto = true
 debug = false
 
-# Debugging (custom) profile (cannot be called debug): include debugging information.
+# Debugging (custom) profile (cannot be called debug): dev + debugging symbols.
 [profile.dbg]
 inherits = 'dev'
 debug = true

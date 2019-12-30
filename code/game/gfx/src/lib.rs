@@ -40,6 +40,7 @@ pub fn create_device<'e, 'i>(instance: &'i Instance<'e>, surface: &Surface) -> R
     let mut query = DeviceFeaturesQuery::new();
     query.require_graphics_queue();
     query.require_present_queue();
+    query.require_swapchain_extension();
     query.require_features(PhysicalDeviceFeatures::builder().build());
     query
   };
