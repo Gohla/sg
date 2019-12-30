@@ -1,36 +1,31 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use byte_strings::c_str;
 
-use vkw::entry::VkEntry;
-use vkw::instance::VkInstance;
+use vkw::prelude::*;
 
-pub struct GfxEntry {
-  pub entry: VkEntry,
+pub fn create_entry() -> Result<Entry> {
+  Ok(Entry::new()?)
 }
 
-impl GfxEntry {
-  pub fn new() -> Result<Self> {
-    let entry = VkEntry::new()
-      .with_context(|| "Failed to create Vulkan entry")?;
-    Ok(Self { entry })
-  }
+pub fn create_instance(entry: &Entry) -> Result<Instance> {
+  let feature_query = {
+    let mut query = InstanceFeaturesQuery::new();
+    query.require_validation_layer();
+    query.require_surface();
+    query
+  };
+  let instance = Instance::new(
+    entry,
+    Some(c_str!("SG")),
+    None,
+    Some(c_str!("SG GFX")),
+    None,
+    None,
+    feature_query
+  )?;
+  Ok(instance)
 }
 
-pub struct GfxInstance<'e> {
-  pub instance: VkInstance<'e>,
-}
-
-impl<'e> GfxInstance<'e> {
-  pub fn new(entry: &'e GfxEntry) -> Result<Self> {
-    let instance = entry.entry.create_instance(
-      Some(c_str!("SG")),
-      None,
-      Some(c_str!("SG GFX")),
-      None,
-      None,
-      None,
-    ).with_context(|| "Failed to create Vulkan instance")?;
-    let gfx = GfxInstance { instance };
-    Ok(gfx)
-  }
+pub fn create_debug_report(entry: &Entry, instance: &Instance) -> Result<DebugReport> {
+  Ok(DebugReport::new(entry, instance)?)
 }
