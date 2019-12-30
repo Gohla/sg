@@ -5,7 +5,7 @@ members = [
   "code/game/sim",
   "code/game/gfx",
   "code/game/client",
-  "code/core/vk",
+  "code/core/vkw",
   "code/core/util",
 ]
 
@@ -28,7 +28,7 @@ opt-level = 2
 opt-level = 2
 [profile.dev.overrides."client"]
 opt-level = 2
-[profile.dev.overrides."vk"]
+[profile.dev.overrides."vkw"]
 opt-level = 2
 [profile.dev.overrides."util"]
 opt-level = 2

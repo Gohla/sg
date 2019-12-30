@@ -1,30 +1,36 @@
 use anyhow::{Context, Result};
+use byte_strings::c_str;
 
-use vk::entry::VkEntry;
-use vk::instance::VkInstance;
+use vkw::entry::VkEntry;
+use vkw::instance::VkInstance;
 
-pub struct Gfx {
+pub struct GfxEntry {
   pub entry: VkEntry,
-  pub instance: VkInstance,
 }
 
-impl Gfx {
+impl GfxEntry {
   pub fn new() -> Result<Self> {
     let entry = VkEntry::new()
       .with_context(|| "Failed to create Vulkan entry")?;
+    Ok(Self { entry })
+  }
+}
 
-    let instance = entry.create_instance(
-      Some(env!("CARGO_PKG_NAME")),
-      None,
-      None,
-      None,
-      None,
-      None,
-      None,
-    )
-      .with_context(|| "Failed to create Vulkan instance")?;
+pub struct GfxInstance<'e> {
+  pub instance: VkInstance<'e>,
+}
 
-    let gfx = Gfx { entry, instance };
+impl<'e> GfxInstance<'e> {
+  pub fn new(entry: &'e GfxEntry) -> Result<Self> {
+    let instance = entry.entry.create_instance(
+      Some(c_str!("SG")),
+      None,
+      Some(c_str!("SG GFX")),
+      None,
+      None,
+      None,
+    ).with_context(|| "Failed to create Vulkan instance")?;
+    let gfx = GfxInstance { instance };
     Ok(gfx)
   }
 }

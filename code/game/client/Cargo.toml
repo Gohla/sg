@@ -11,3 +11,4 @@ gfx = {path = "../gfx"}
 util = {path = "../../core/util"}
 ash = "0.29"
 anyhow = "1.0"
+simple_logger = "1.3"

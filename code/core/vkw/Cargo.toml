@@ -1,5 +1,6 @@
 [package]
-name = "vk"
+name = "vkw"
+description = "Lightweight wrapper around ash Vulkan bindings"
 version = "0.1.0"
 authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
 edition = "2018"
@@ -8,4 +9,6 @@ publish = false
 [dependencies]
 util = {path = "../util"}
 ash = "0.29"
+byte-strings = "0.1"
 thiserror = "1.0"
+log = "0.4"
