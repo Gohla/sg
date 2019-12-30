@@ -9,7 +9,7 @@ pub fn create_entry() -> Result<Entry> {
 }
 
 pub fn create_instance(entry: &Entry) -> Result<Instance> {
-  let feature_query = {
+  let features_query = {
     let mut query = InstanceFeaturesQuery::new();
     query.require_validation_layer();
     query.require_surface();
@@ -22,7 +22,7 @@ pub fn create_instance(entry: &Entry) -> Result<Instance> {
     Some(c_str!("SG GFX")),
     None,
     None,
-    feature_query
+    features_query
   )?;
   Ok(instance)
 }
@@ -33,4 +33,15 @@ pub fn create_debug_report(entry: &Entry, instance: &Instance) -> Result<DebugRe
 
 pub fn create_surface(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Surface> {
   Ok(Surface::new(entry, instance, window)?)
+}
+
+pub fn create_device<'e, 'i>(instance: &'i Instance<'e>, surface: &Surface) -> Result<Device<'e, 'i>> {
+  let features_query = {
+    let mut query = DeviceFeaturesQuery::new();
+    query.require_graphics_queue();
+    query.require_present_queue();
+    query.require_features(PhysicalDeviceFeatures::builder().build());
+    query
+  };
+  Ok(Device::new(instance, features_query, Some(surface))?)
 }

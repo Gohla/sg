@@ -28,7 +28,7 @@ impl DebugReport {
     use vk::DebugReportCallbackCreateInfoEXT;
 
     let info = DebugReportCallbackCreateInfoEXT::builder()
-      .flags(DebugReportFlagsEXT::ERROR | DebugReportFlagsEXT::WARNING | DebugReportFlagsEXT::PERFORMANCE_WARNING | DebugReportFlagsEXT::INFORMATION | DebugReportFlagsEXT::DEBUG)
+      .flags(DebugReportFlagsEXT::ERROR | DebugReportFlagsEXT::WARNING | DebugReportFlagsEXT::PERFORMANCE_WARNING)
       .pfn_callback(Some(vulkan_debug_callback));
     let loader = VkDebugReport::new(&entry.wrapped, &instance.wrapped);
     let callback = unsafe { loader.create_debug_report_callback(&info, None) }?;

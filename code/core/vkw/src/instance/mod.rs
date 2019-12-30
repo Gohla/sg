@@ -46,7 +46,7 @@ impl InstanceFeatures {
 
 // Creation
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct InstanceFeaturesQuery {
   wanted_layers: HashSet<CString>,
   required_layers: HashSet<CString>,
@@ -55,14 +55,7 @@ pub struct InstanceFeaturesQuery {
 }
 
 impl InstanceFeaturesQuery {
-  pub fn new() -> Self {
-    Self {
-      wanted_layers: HashSet::new(),
-      required_layers: HashSet::new(),
-      wanted_extensions: HashSet::new(),
-      required_extensions: HashSet::new()
-    }
-  }
+  pub fn new() -> Self { Self::default() }
 
 
   pub fn want_layer<S: Into<CString>>(&mut self, name: S) {
@@ -106,7 +99,7 @@ impl<'e> Instance<'e> {
     engine_name: Option<&CStr>,
     engine_version: Option<VkVersion>,
     max_vulkan_api_version: Option<VkVersion>,
-    feature_query: InstanceFeaturesQuery,
+    features_query: InstanceFeaturesQuery,
   ) -> Result<Self, InstanceCreateError> {
     use InstanceCreateError::*;
     use std::ptr;
@@ -126,7 +119,7 @@ impl<'e> Instance<'e> {
       required_layers,
       wanted_extensions,
       required_extensions
-    } = feature_query;
+    } = features_query;
 
     let enabled_layers = {
       let available: HashSet<_> = entry.enumerate_instance_layer_properties()
@@ -138,7 +131,7 @@ impl<'e> Instance<'e> {
       if !missing.is_empty() {
         return Err(RequiredLayersMissing(missing));
       }
-      let enabled: HashSet<_> = available.union(&wanted_layers.union(&required_layers).cloned().collect()).cloned().collect();
+      let enabled: HashSet<_> = available.intersection(&wanted_layers.union(&required_layers).cloned().collect()).cloned().collect();
       enabled
     };
     let enabled_layers_raw: Vec<_> = enabled_layers.iter().map(|n| n.as_ptr()).collect();
@@ -153,7 +146,7 @@ impl<'e> Instance<'e> {
       if !missing.is_empty() {
         return Err(RequiredExtensionsMissing(missing));
       }
-      let enabled: HashSet<_> = available.union(&wanted_extensions.union(&required_extensions).cloned().collect()).cloned().collect();
+      let enabled: HashSet<_> = available.intersection(&wanted_extensions.union(&required_extensions).cloned().collect()).cloned().collect();
       enabled
     };
     let enabled_extensions_raw: Vec<_> = enabled_extensions.iter().map(|n| n.as_ptr()).collect();
@@ -182,6 +175,6 @@ impl<'e> Deref for Instance<'e> {
 
 impl<'e> Drop for Instance<'e> {
   fn drop(&mut self) {
-    unsafe { self.wrapped.destroy_instance(None) };
+    unsafe { self.wrapped.destroy_instance(None); }
   }
 }

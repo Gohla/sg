@@ -23,8 +23,8 @@ pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_win32_
 // Wrapper
 
 pub struct Surface {
-  loader: VkSurface,
-  surface: SurfaceKHR,
+  pub loader: VkSurface,
+  pub wrapped: SurfaceKHR,
 }
 
 // Creation
@@ -41,7 +41,7 @@ impl Surface {
   pub fn new(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
     let loader = VkSurface::new(&entry.wrapped, &instance.wrapped);
     let surface = Self::create_surface(entry, instance, window)?;
-    Ok(Self { loader, surface })
+    Ok(Self { loader, wrapped: surface })
   }
 
   fn create_surface(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
@@ -95,6 +95,6 @@ impl InstanceFeaturesQuery {
 
 impl Drop for Surface {
   fn drop(&mut self) {
-    unsafe { self.loader.destroy_surface(self.surface, None); }
+    unsafe { self.loader.destroy_surface(self.wrapped, None); }
   }
 }
