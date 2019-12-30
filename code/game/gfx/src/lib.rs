@@ -1,5 +1,6 @@
 use anyhow::Result;
 use byte_strings::c_str;
+use raw_window_handle::RawWindowHandle;
 
 use vkw::prelude::*;
 
@@ -28,4 +29,8 @@ pub fn create_instance(entry: &Entry) -> Result<Instance> {
 
 pub fn create_debug_report(entry: &Entry, instance: &Instance) -> Result<DebugReport> {
   Ok(DebugReport::new(entry, instance)?)
+}
+
+pub fn create_surface(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Surface> {
+  Ok(Surface::new(entry, instance, window)?)
 }
