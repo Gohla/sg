@@ -59,7 +59,7 @@ pub struct DeviceFeaturesQuery {
   required_features: PhysicalDeviceFeatures,
 }
 
-impl<'s> DeviceFeaturesQuery {
+impl DeviceFeaturesQuery {
   pub fn new() -> Self { Self::default() }
 
 
@@ -211,14 +211,14 @@ impl<'e, 'i> Device<'e, 'i> {
 
 // Implementations
 
-impl<'e, 'i> Deref for Device<'e, 'i> {
+impl Deref for Device<'_, '_> {
   type Target = VkDevice;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl<'e, 'i> Drop for Device<'e, 'i> {
+impl Drop for Device<'_, '_> {
   fn drop(&mut self) {
     unsafe {
       self.wrapped.destroy_device(None);

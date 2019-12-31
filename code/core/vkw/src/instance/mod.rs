@@ -153,14 +153,14 @@ impl<'e> Instance<'e> {
 
 // Implementations
 
-impl<'e> Deref for Instance<'e> {
+impl Deref for Instance<'_> {
   type Target = VkInstance;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl<'e> Drop for Instance<'e> {
+impl Drop for Instance<'_> {
   fn drop(&mut self) {
     unsafe { self.wrapped.destroy_instance(None); }
   }

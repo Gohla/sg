@@ -51,13 +51,13 @@ pub fn create_swapchain_loader(instance: &Instance, device: &Device) -> Swapchai
   SwapchainLoader::new(instance, device)
 }
 
-pub fn create_swapchain<'l, S: Into<(u32, u32)>>(
+pub fn create_swapchain<'l, 'd, 'e, 'i, S: Into<(u32, u32)>>(
   loader: &'l SwapchainLoader,
-  device: &Device,
+  device: &'d Device<'e, 'i>,
   surface: &Surface,
   surface_size: S,
   old_swapchain: Option<Swapchain>
-) -> Result<Swapchain<'l>> {
+) -> Result<Swapchain<'l, 'd, 'e, 'i>> {
   let features_query = {
     let mut query = SwapchainFeaturesQuery::new();
     query.want_image_count(2);

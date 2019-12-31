@@ -2,11 +2,12 @@ use std::ffi::CStr;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as VkSwapchainLoader;
-use ash::vk::{self, Extent2D, PresentModeKHR, Result as VkError, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
+use ash::vk::{self, Extent2D, ImageView, PresentModeKHR, Result as VkError, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
 use thiserror::Error;
 
 use crate::device::{Device, DeviceFeatures, DeviceFeaturesQuery};
+use crate::image::view::ImageViewCreateError;
 use crate::instance::Instance;
 use crate::instance::surface_extension::{Surface, SurfaceFormatError};
 
@@ -16,9 +17,11 @@ pub struct SwapchainLoader {
   pub wrapped: VkSwapchainLoader,
 }
 
-pub struct Swapchain<'l> {
+pub struct Swapchain<'l, 'd, 'e, 'i> {
   pub loader: &'l SwapchainLoader,
+  pub device: &'d Device<'e, 'i>,
   pub wrapped: SwapchainKHR,
+  pub image_views: Vec<ImageView>,
   pub features: SwapchainFeatures,
 }
 
@@ -60,8 +63,6 @@ impl SwapchainFeaturesQuery {
 
 #[derive(Error, Debug)]
 pub enum SwapchainCreateError {
-  #[error("Failed to create swapchain")]
-  SwapchainCreateFail(#[source] VkError),
   #[error("Failed to get surface format")]
   SurfaceFormatFail(#[from] SurfaceFormatError),
   #[error("Failed to get surface capabilities")]
@@ -70,12 +71,18 @@ pub enum SwapchainCreateError {
   SurfacePresentModesFail(#[source] VkError),
   #[error("Failed to find present mode")]
   NoPresentModeFound(),
+  #[error("Failed to create swapchain")]
+  SwapchainCreateFail(#[source] VkError),
+  #[error("Failed to get swapchain images")]
+  SwapchainImagesFail(#[source] VkError),
+  #[error("Failed to create image views for swapchain images")]
+  SwapchainImageViewsCreateFail(#[from] ImageViewCreateError),
 }
 
-impl<'l> Swapchain<'l> {
+impl<'l, 'd, 'e, 'i> Swapchain<'l, 'd, 'e, 'i> {
   pub fn new(
     loader: &'l SwapchainLoader,
-    device: &Device,
+    device: &'d Device<'e, 'i>,
     surface: &Surface,
     features_query: SwapchainFeaturesQuery,
     surface_extent: vk::Extent2D,
@@ -136,6 +143,19 @@ impl<'l> Swapchain<'l> {
     }
     let swapchain = unsafe { loader.create_swapchain(&create_info, None) }
       .map_err(|e| SwapchainCreateFail(e))?;
+
+    let images = unsafe { loader.get_swapchain_images(swapchain) }
+      .map_err(|e| SwapchainImagesFail(e))?;
+    let image_views = {
+      let image_views: Result<Vec<_>, _> = images
+        .into_iter()
+        .map(|image| {
+          device.create_image_view(image, surface_format.format, vk::ImageViewType::TYPE_2D, vk::ImageAspectFlags::COLOR, 1)
+        })
+        .collect();
+      image_views?
+    };
+
     let features = SwapchainFeatures {
       min_image_count,
       surface_format,
@@ -144,7 +164,8 @@ impl<'l> Swapchain<'l> {
       present_mode,
       extent
     };
-    Ok(Self { loader, wrapped: swapchain, features })
+
+    Ok(Self { loader, device, wrapped: swapchain, image_views, features })
   }
 
   fn select_present_mode(available_present_modes: Vec<PresentModeKHR>, wanted_present_modes_ord: Vec<PresentModeKHR>) -> Option<PresentModeKHR> {
@@ -190,16 +211,21 @@ impl Deref for SwapchainLoader {
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl<'l> Deref for Swapchain<'l> {
+impl Deref for Swapchain<'_, '_, '_, '_> {
   type Target = SwapchainKHR;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl<'l> Drop for Swapchain<'l> {
+impl Drop for Swapchain<'_, '_, '_, '_> {
   fn drop(&mut self) {
-    unsafe { self.loader.destroy_swapchain(self.wrapped, None); }
+    unsafe {
+      for image_view in &self.image_views {
+        self.device.destroy_image_view(*image_view);
+      }
+      self.loader.destroy_swapchain(self.wrapped, None);
+    }
   }
 }
 
