@@ -345,6 +345,7 @@ name = "gfx"
 version = "0.1.0"
 dependencies = [
  "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ash 0.29.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byte-strings 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "raw-window-handle 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "util 0.1.0",

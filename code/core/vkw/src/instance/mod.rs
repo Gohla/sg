@@ -25,8 +25,8 @@ pub struct Instance<'e> {
 
 #[derive(Debug)]
 pub struct InstanceFeatures {
-  enabled_layers: HashSet<CString>,
-  enabled_extensions: HashSet<CString>,
+  pub enabled_layers: HashSet<CString>,
+  pub enabled_extensions: HashSet<CString>,
 }
 
 impl InstanceFeatures {

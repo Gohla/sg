@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 vkw = {path = "../../core/vkw"}
 util = {path = "../../core/util"}
+ash = "0.29"
 raw-window-handle = "0.3"
 byte-strings = "0.1"
 anyhow = "1.0"

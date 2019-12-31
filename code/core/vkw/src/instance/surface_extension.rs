@@ -1,6 +1,7 @@
 use std::ffi::CStr;
+use std::ops::Deref;
 
-use ash::extensions::khr::Surface as VkSurface;
+use ash::extensions::khr::Surface as SurfaceLoader;
 use ash::vk::{self, Result as VkError, SurfaceKHR};
 use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
@@ -9,21 +10,10 @@ use thiserror::Error;
 use crate::entry::Entry;
 use crate::instance::{Instance, InstanceFeatures, InstanceFeaturesQuery};
 
-// Extension names
-
-pub const SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_surface");
-
-#[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_xlib_surface");
-#[cfg(target_os = "macos")]
-pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_MVK_macos_surface");
-#[cfg(all(windows))]
-pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_win32_surface");
-
 // Wrapper
 
 pub struct Surface {
-  pub loader: VkSurface,
+  pub loader: SurfaceLoader,
   pub wrapped: SurfaceKHR,
 }
 
@@ -33,13 +23,13 @@ pub struct Surface {
 pub enum SurfaceCreateError {
   #[error("Got a window handle that does not match with the current platform")]
   WindowHandleMismatch,
-  #[error("Failed to create Vulkan surface")]
+  #[error("Failed to create surface")]
   SurfaceCreateFail(#[source] VkError)
 }
 
 impl Surface {
   pub fn new(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
-    let loader = VkSurface::new(&entry.wrapped, &instance.wrapped);
+    let loader = SurfaceLoader::new(&entry.wrapped, &instance.wrapped);
     let surface = Self::create_surface(entry, instance, window)?;
     Ok(Self { loader, wrapped: surface })
   }
@@ -69,11 +59,12 @@ impl Surface {
       }
     }
 
-    // TODO: support other platforms
+    // TODO: support macOS
+    // TODO: support UNIX
   }
 }
 
-// Implementations
+// API
 
 impl InstanceFeatures {
   pub fn is_surface_extension_enabled(&self) -> bool {
@@ -93,8 +84,60 @@ impl InstanceFeaturesQuery {
   }
 }
 
+#[derive(Error, Debug)]
+pub enum SurfaceFormatError {
+  #[error("Failed to get physical device surface formats")]
+  PhysicalDeviceSurfaceFormatsFail(#[source] VkError),
+  #[error("Failed to find a suitable surface format")]
+  NoSuitableSurfaceFormatFound,
+}
+
+impl Surface {
+  pub fn get_suitable_surface_format(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR, SurfaceFormatError> {
+    use SurfaceFormatError::*;
+    let surface_formats = unsafe { self.loader.get_physical_device_surface_formats(physical_device, self.wrapped) }
+      .map_err(|e| PhysicalDeviceSurfaceFormatsFail(e))?;
+    for surface_format in surface_formats {
+      // TODO: more sophisticated way to select suitable surface format.
+      if surface_format.format == vk::Format::B8G8R8A8_UNORM && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR {
+        return Ok(surface_format);
+      }
+    }
+    Err(NoSuitableSurfaceFormatFound)
+  }
+
+  pub fn get_capabilities(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceCapabilitiesKHR, VkError> {
+    unsafe { self.loader.get_physical_device_surface_capabilities(physical_device, self.wrapped) }
+  }
+
+  pub fn get_present_modes(&self, physical_device: vk::PhysicalDevice) -> Result<Vec<vk::PresentModeKHR>, VkError> {
+    unsafe { self.loader.get_physical_device_surface_present_modes(physical_device, self.wrapped) }
+  }
+}
+
+// Implementations
+
+impl Deref for Surface {
+  type Target = SurfaceKHR;
+
+  #[inline]
+  fn deref(&self) -> &Self::Target { &self.wrapped }
+}
+
+
 impl Drop for Surface {
   fn drop(&mut self) {
     unsafe { self.loader.destroy_surface(self.wrapped, None); }
   }
 }
+
+// Extension names
+
+pub const SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_surface");
+
+#[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
+pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_xlib_surface");
+#[cfg(target_os = "macos")]
+pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_MVK_macos_surface");
+#[cfg(all(windows))]
+pub const PLATFORM_SURFACE_EXTENSION_NAME: &'static CStr = c_str!("VK_KHR_win32_surface");

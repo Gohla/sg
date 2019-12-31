@@ -10,10 +10,6 @@ use crate::instance::InstanceFeatures;
 
 use super::{Instance, InstanceFeaturesQuery};
 
-// Extension name
-
-pub const DEBUG_REPORT_EXTENSION_NAME: &'static CStr = c_str!("VK_EXT_debug_report");
-
 // Wrapper
 
 pub struct DebugReport {
@@ -36,7 +32,7 @@ impl DebugReport {
   }
 }
 
-// Implementations
+// API
 
 impl InstanceFeaturesQuery {
   pub fn want_debug_report_extension(&mut self) {
@@ -54,11 +50,19 @@ impl InstanceFeatures {
   }
 }
 
+// Implementations
+
 impl Drop for DebugReport {
   fn drop(&mut self) {
     unsafe { self.loader.destroy_debug_report_callback(self.callback, None); }
   }
 }
+
+// Extension name
+
+pub const DEBUG_REPORT_EXTENSION_NAME: &'static CStr = c_str!("VK_EXT_debug_report");
+
+// Callback
 
 unsafe extern "system" fn vulkan_debug_callback(
   flags: DebugReportFlagsEXT,

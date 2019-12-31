@@ -46,3 +46,29 @@ pub fn create_device<'e, 'i>(instance: &'i Instance<'e>, surface: &Surface) -> R
   };
   Ok(Device::new(instance, features_query, Some(surface))?)
 }
+
+pub fn create_swapchain_loader(instance: &Instance, device: &Device) -> SwapchainLoader {
+  SwapchainLoader::new(instance, device)
+}
+
+pub fn create_swapchain<'l, S: Into<(u32, u32)>>(
+  loader: &'l SwapchainLoader,
+  device: &Device,
+  surface: &Surface,
+  surface_size: S,
+  old_swapchain: Option<Swapchain>
+) -> Result<Swapchain<'l>> {
+  let features_query = {
+    let mut query = SwapchainFeaturesQuery::new();
+    query.want_image_count(2);
+    query.want_present_mode(vec![
+      PresentModeKHR::IMMEDIATE,
+      PresentModeKHR::MAILBOX,
+      PresentModeKHR::FIFO_RELAXED,
+      PresentModeKHR::FIFO,
+    ]);
+    query
+  };
+  let (width, height) = surface_size.into();
+  Ok(Swapchain::new(loader, device, surface, features_query, Extent2D { width, height }, old_swapchain)?)
+}

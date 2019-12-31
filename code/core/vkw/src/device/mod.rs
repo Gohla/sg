@@ -20,10 +20,20 @@ pub mod swapchain_extension;
 
 // Wrapper
 
+pub struct Device<'e, 'i> {
+  pub instance: &'i Instance<'e>,
+  pub wrapped: VkDevice,
+  pub physical_device: VkPhysicalDevice,
+  pub graphics_queue_index: Option<u32>,
+  pub present_queue_index: Option<u32>,
+  pub compute_queue_index: Option<u32>,
+  pub features: DeviceFeatures,
+}
+
 #[derive(Debug)]
 pub struct DeviceFeatures {
-  enabled_extensions: HashSet<CString>,
-  enabled_features: PhysicalDeviceFeatures,
+  pub enabled_extensions: HashSet<CString>,
+  pub enabled_features: PhysicalDeviceFeatures,
 }
 
 impl DeviceFeatures {
@@ -35,15 +45,6 @@ impl DeviceFeatures {
   pub fn is_extension_enabled<B: Borrow<CStr> + ?Sized>(&self, extension_name: &B) -> bool {
     self.enabled_extensions.contains(extension_name.borrow())
   }
-
-  pub fn get_enabled_features(&self) -> &PhysicalDeviceFeatures { &self.enabled_features }
-}
-
-pub struct Device<'e, 'i> {
-  pub instance: &'i Instance<'e>,
-  pub wrapped: VkDevice,
-  pub physical_device: VkPhysicalDevice,
-  pub features: DeviceFeatures,
 }
 
 // Creation
@@ -134,14 +135,14 @@ impl<'e, 'i> Device<'e, 'i> {
 
       // TODO: check features
 
-      let (graphics_queue_id, present_queue_id, compute_queue_id) = {
+      let (graphics_queue_index, present_queue_index, compute_queue_index) = {
         let mut graphics = None;
         let mut present = None;
         let mut compute = None;
         let queue_families_properties = unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
         for (index, queue_family_properties) in queue_families_properties.into_iter().enumerate() {
           if require_graphics_queue && graphics.is_none() && queue_family_properties.queue_flags.contains(QueueFlags::GRAPHICS) {
-            graphics = Some(index);
+            graphics = Some(index as u32);
           }
           if require_present_queue && present.is_none() {
             if let Some(surface) = required_surface_support {
@@ -149,10 +150,10 @@ impl<'e, 'i> Device<'e, 'i> {
                 continue;
               }
             }
-            present = Some(index);
+            present = Some(index as u32);
           }
           if require_compute_queue && compute.is_none() && queue_family_properties.queue_flags.contains(QueueFlags::COMPUTE) {
-            compute = Some(index);
+            compute = Some(index as u32);
           }
         }
         if require_graphics_queue && graphics.is_none() { continue; }
@@ -164,23 +165,23 @@ impl<'e, 'i> Device<'e, 'i> {
       let queue_priorities = [1.0];
       let queue_create_infos = {
         let mut infos = Vec::new();
-        if let Some(id) = graphics_queue_id {
+        if let Some(idx) = graphics_queue_index {
           infos.push(DeviceQueueCreateInfo::builder()
-            .queue_family_index(id as u32)
+            .queue_family_index(idx)
             .queue_priorities(&queue_priorities)
             .build()
           );
         }
-        if let Some(id) = present_queue_id {
+        if let Some(idx) = present_queue_index {
           infos.push(DeviceQueueCreateInfo::builder()
-            .queue_family_index(id as u32)
+            .queue_family_index(idx)
             .queue_priorities(&queue_priorities)
             .build()
           );
         }
-        if let Some(id) = compute_queue_id {
+        if let Some(idx) = compute_queue_index {
           infos.push(DeviceQueueCreateInfo::builder()
-            .queue_family_index(id as u32)
+            .queue_family_index(idx)
             .queue_priorities(&queue_priorities)
             .build()
           );
@@ -193,12 +194,15 @@ impl<'e, 'i> Device<'e, 'i> {
         .enabled_features(&required_features);
       let device = unsafe { instance.create_device(physical_device, &create_info, None) }
         .map_err(|e| DeviceCreateFail(e))?;
-      let device_features = DeviceFeatures::new(enabled_extensions, required_features);
+      let features = DeviceFeatures::new(enabled_extensions, required_features);
       return Ok(Self {
         instance,
         wrapped: device,
         physical_device,
-        features: device_features,
+        graphics_queue_index,
+        present_queue_index,
+        compute_queue_index,
+        features,
       });
     }
     Err(NoSuitablePhysicalDeviceFound)
