@@ -102,6 +102,7 @@ impl<'e> Instance<'e> {
     features_query: InstanceFeaturesQuery,
   ) -> Result<Self, InstanceCreateError> {
     use InstanceCreateError::*;
+    use crate::util::get_enabled_or_missing;
     use std::ptr;
     use vk::{ApplicationInfo, InstanceCreateInfo};
 
@@ -120,36 +121,22 @@ impl<'e> Instance<'e> {
       wanted_extensions,
       required_extensions
     } = features_query;
-
-    let enabled_layers = {
-      let available: HashSet<_> = entry.enumerate_instance_layer_properties()
+    let (enabled_layers, enabled_layers_raw) = {
+      let available = entry.enumerate_instance_layer_properties()
         .map_err(|e| EnumerateLayerFail(e))?
         .into_iter()
-        .map(|p| unsafe { CStr::from_ptr(p.layer_name.as_ptr()) }.to_owned())
-        .collect();
-      let missing: Vec<_> = required_layers.difference(&available).cloned().collect();
-      if !missing.is_empty() {
-        return Err(RequiredLayersMissing(missing));
-      }
-      let enabled: HashSet<_> = available.intersection(&wanted_layers.union(&required_layers).cloned().collect()).cloned().collect();
-      enabled
+        .map(|p| unsafe { CStr::from_ptr(p.layer_name.as_ptr()) }.to_owned());
+      get_enabled_or_missing(available, &wanted_layers, &required_layers)
+        .map_err(|e| RequiredLayersMissing(e.0))?
     };
-    let enabled_layers_raw: Vec<_> = enabled_layers.iter().map(|n| n.as_ptr()).collect();
-
-    let enabled_extensions = {
-      let available: HashSet<_> = entry.enumerate_instance_extension_properties()
-        .map_err(|e| EnumerateLayerFail(e))?
+    let (enabled_extensions, enabled_extensions_raw) = {
+      let available = entry.enumerate_instance_extension_properties()
+        .map_err(|e| EnumerateExtensionFail(e))?
         .into_iter()
-        .map(|p| unsafe { CStr::from_ptr(p.extension_name.as_ptr()) }.to_owned())
-        .collect();
-      let missing: Vec<_> = required_extensions.difference(&available).cloned().collect();
-      if !missing.is_empty() {
-        return Err(RequiredExtensionsMissing(missing));
-      }
-      let enabled: HashSet<_> = available.intersection(&wanted_extensions.union(&required_extensions).cloned().collect()).cloned().collect();
-      enabled
+        .map(|p| unsafe { CStr::from_ptr(p.extension_name.as_ptr()) }.to_owned());
+      get_enabled_or_missing(available, &wanted_extensions, &required_extensions)
+        .map_err(|e| RequiredExtensionsMissing(e.0))?
     };
-    let enabled_extensions_raw: Vec<_> = enabled_extensions.iter().map(|n| n.as_ptr()).collect();
 
     let create_info = InstanceCreateInfo::builder()
       .application_info(&application_info)
@@ -158,9 +145,9 @@ impl<'e> Instance<'e> {
 
     let instance = unsafe { entry.create_instance(&create_info, None) }
       .map_err(|e| InstanceCreateFail(e))?;
-    let instance_features = InstanceFeatures::new(enabled_layers, enabled_extensions);
+    let features = InstanceFeatures::new(enabled_layers, enabled_extensions);
 
-    Ok(Self { entry, wrapped: instance, features: instance_features })
+    Ok(Self { entry, wrapped: instance, features })
   }
 }
 

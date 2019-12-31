@@ -105,6 +105,7 @@ impl<'e, 'i> Device<'e, 'i> {
     required_surface_support: Option<&Surface>,
   ) -> Result<Self, PhysicalDeviceCreateError> {
     use PhysicalDeviceCreateError::*;
+    use crate::util::get_enabled_or_missing;
     use vk::DeviceQueueCreateInfo;
     use vk::DeviceCreateInfo;
 
@@ -120,20 +121,16 @@ impl<'e, 'i> Device<'e, 'i> {
     let physical_devices = unsafe { instance.enumerate_physical_devices() }
       .map_err(|e| EnumeratePhysicalDevicesFail(e))?;
     for physical_device in physical_devices {
-      let enabled_extensions = {
-        let available: HashSet<_> = unsafe { instance.enumerate_device_extension_properties(physical_device) }
+      let (enabled_extensions, enabled_extensions_raw) = {
+        let available = unsafe { instance.enumerate_device_extension_properties(physical_device) }
           .map_err(|e| EnumerateExtensionPropertiesFail(e))?
           .into_iter()
-          .map(|p| unsafe { CStr::from_ptr(p.extension_name.as_ptr()) }.to_owned())
-          .collect();
-        let missing: Vec<_> = required_extensions.difference(&available).cloned().collect();
-        if !missing.is_empty() {
-          continue;
+          .map(|p| unsafe { CStr::from_ptr(p.extension_name.as_ptr()) }.to_owned());
+        match get_enabled_or_missing(available, &wanted_extensions, &required_extensions) {
+          Ok(t) => t,
+          Err(_) => continue,
         }
-        let enabled: HashSet<_> = available.intersection(&wanted_extensions.union(&required_extensions).cloned().collect()).cloned().collect();
-        enabled
       };
-      let enabled_extensions_raw: Vec<_> = enabled_extensions.iter().map(|n| n.as_ptr()).collect();
 
       // TODO: check features
 
