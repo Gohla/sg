@@ -5,7 +5,8 @@ use thiserror::Error;
 
 use crate::command_pool::{CommandPoolCreateError, CommandPoolResetError};
 use crate::device::Device;
-use crate::sync::{FenceCreateError, FenceResetError, FenceWaitError, SemaphoreCreateError, Timeout};
+use crate::sync::{FenceCreateError, FenceResetError, FenceWaitError, SemaphoreCreateError};
+use crate::timeout::Timeout;
 
 // Renderer
 

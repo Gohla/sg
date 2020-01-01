@@ -2,7 +2,7 @@ use std::ffi::CStr;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as VkSwapchainLoader;
-use ash::vk::{self, Extent2D, ImageView, PresentModeKHR, Result as VkError, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
+use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
 use thiserror::Error;
 
@@ -10,6 +10,7 @@ use crate::device::{Device, DeviceFeatures, DeviceFeaturesQuery};
 use crate::image::view::ImageViewCreateError;
 use crate::instance::Instance;
 use crate::instance::surface_extension::{Surface, SurfaceFormatError};
+use crate::timeout::Timeout;
 
 // Wrapper
 
@@ -19,9 +20,12 @@ pub struct SwapchainLoader {
 
 pub struct Swapchain<'a> {
   pub loader: &'a SwapchainLoader,
+  pub surface: &'a Surface<'a>,
   pub device: &'a Device<'a>,
   pub wrapped: SwapchainKHR,
   pub image_views: Vec<ImageView>,
+  pub extent: Extent2D,
+  pub features_query: SwapchainFeaturesQuery,
   pub features: SwapchainFeatures,
 }
 
@@ -32,7 +36,6 @@ pub struct SwapchainFeatures {
   pub sharing_mode: SharingMode,
   pub pre_transform: SurfaceTransformFlagsKHR,
   pub present_mode: PresentModeKHR,
-  pub extent: Extent2D,
 }
 
 // Creation
@@ -44,7 +47,7 @@ impl SwapchainLoader {
   }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct SwapchainFeaturesQuery {
   wanted_image_count: u32,
   wanted_present_modes_ord: Vec<PresentModeKHR>,
@@ -52,7 +55,6 @@ pub struct SwapchainFeaturesQuery {
 
 impl SwapchainFeaturesQuery {
   pub fn new() -> Self { Self::default() }
-
 
   pub fn want_image_count(&mut self, image_count: u32) { self.wanted_image_count = image_count; }
 
@@ -83,10 +85,10 @@ impl<'a> Swapchain<'a> {
   pub fn new(
     loader: &'a SwapchainLoader,
     device: &'a Device,
-    surface: &Surface,
+    surface: &'a Surface,
     features_query: SwapchainFeaturesQuery,
-    surface_extent: vk::Extent2D,
-    old_swapchain: Option<Swapchain>
+    surface_extent: Extent2D,
+    old_swapchain: Option<&Swapchain>
   ) -> Result<Self, SwapchainCreateError> {
     use SwapchainCreateError::*;
     use std::cmp::{min, max};
@@ -118,7 +120,7 @@ impl<'a> Swapchain<'a> {
     let present_mode = {
       let available_present_modes = surface.get_present_modes(device.physical_device)
         .map_err(|e| SurfacePresentModesFail(e))?;
-      Self::select_present_mode(available_present_modes, features_query.wanted_present_modes_ord)
+      Self::select_present_mode(available_present_modes, features_query.wanted_present_modes_ord.clone())
         .ok_or(NoPresentModeFound())?
     };
 
@@ -161,10 +163,9 @@ impl<'a> Swapchain<'a> {
       sharing_mode,
       pre_transform,
       present_mode,
-      extent
     };
 
-    Ok(Self { loader, device, wrapped: swapchain, image_views, features })
+    Ok(Self { loader, surface, device, wrapped: swapchain, image_views, extent, features_query, features })
   }
 
   fn select_present_mode(available_present_modes: Vec<PresentModeKHR>, wanted_present_modes_ord: Vec<PresentModeKHR>) -> Option<PresentModeKHR> {
@@ -176,7 +177,7 @@ impl<'a> Swapchain<'a> {
       }
     }
     if !available_present_modes.is_empty() {
-      Some(available_present_modes[0])// No preference, return first present mode.
+      Some(available_present_modes[0]) // No preference, return first present mode.
     } else {
       None // No present mode available.
     }
@@ -184,6 +185,34 @@ impl<'a> Swapchain<'a> {
 }
 
 // API
+
+impl Swapchain<'_> {
+  pub fn recreate(&mut self, surface_extent: Extent2D) -> Result<(), SwapchainCreateError> {
+    let mut new_swapchain = Self::new(self.loader, self.device, self.surface, self.features_query.clone(), surface_extent, Some(&self))?;
+    std::mem::swap(self, &mut new_swapchain);
+    Ok(())
+  }
+}
+
+#[derive(Error, Debug)]
+#[error("Failed to acquire next image from swapchain")]
+pub struct AcquireNextImageError(#[from] VkError);
+
+impl Swapchain<'_> {
+  pub unsafe fn acquire_next_image(&self, timeout: Timeout, semaphore: Option<Semaphore>, fence: Option<Fence>) -> Result<(u32, bool), AcquireNextImageError> {
+    Ok(self.loader.acquire_next_image(self.wrapped, timeout.into(), semaphore.unwrap_or_default(), fence.unwrap_or_default())?)
+  }
+}
+
+#[derive(Error, Debug)]
+#[error("Failed to acquire next image from swapchain")]
+pub struct QueuePresentError(#[from] VkError);
+
+impl Swapchain<'_> {
+  pub unsafe fn queue_present(&self, queue: Queue, create_info: &vk::PresentInfoKHR) -> Result<bool, QueuePresentError> {
+    Ok(self.loader.queue_present(queue, create_info)?)
+  }
+}
 
 impl DeviceFeatures {
   pub fn is_swapchain_extension_enabled(&self) -> bool {

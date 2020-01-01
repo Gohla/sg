@@ -7,6 +7,7 @@ use winit::{
 };
 use winit::platform::desktop::EventLoopExtDesktop;
 use winit::window::Window;
+use vkw::prelude::*;
 
 use gfx::{create_debug_report, create_device, create_entry, create_instance, create_surface, create_swapchain, create_swapchain_loader};
 
@@ -35,22 +36,27 @@ fn main() -> Result<()> {
   dbg!(&device.features);
 
   let swapchain_loader = create_swapchain_loader(&device);
-  let swapchain = create_swapchain(&swapchain_loader, &device, &surface, window.inner_size(), None)
+  let mut swapchain = create_swapchain(&swapchain_loader, &device, &surface, window.inner_size())
     .with_context(|| "Failed to create GFX swapchain")?;
   dbg!(&swapchain.features);
 
-  run(event_loop, window)?;
+  run(event_loop, window, &mut swapchain)?;
 
   Ok(())
 }
 
-fn run(mut event_loop: EventLoop<()>, window: Window) -> Result<()> {
+fn run(mut event_loop: EventLoop<()>, window: Window, swapchain: &mut Swapchain) -> Result<()> {
   Ok(event_loop.run_return(move |event, _, control_flow| {
     match event {
-      Event::WindowEvent {
-        event: WindowEvent::CloseRequested,
-        window_id,
-      } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+      Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
+        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+        WindowEvent::Resized(window_size) => {
+          let (width, height) = window_size.into();
+          swapchain.recreate(Extent2D { width, height })
+            .with_context(|| "Failed to recreate GFX swapchain").unwrap();
+        }
+        _ => *control_flow = ControlFlow::Wait,
+      },
       _ => *control_flow = ControlFlow::Wait,
     }
   }))

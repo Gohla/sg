@@ -34,7 +34,6 @@ impl InstanceFeatures {
     Self { enabled_layers, enabled_extensions }
   }
 
-
   pub fn is_layer_enabled<B: Borrow<CStr> + ?Sized>(&self, layer_name: &B) -> bool {
     self.enabled_layers.contains(layer_name.borrow())
   }
@@ -56,7 +55,6 @@ pub struct InstanceFeaturesQuery {
 
 impl InstanceFeaturesQuery {
   pub fn new() -> Self { Self::default() }
-
 
   pub fn want_layer<S: Into<CString>>(&mut self, name: S) {
     self.wanted_layers.insert(name.into());

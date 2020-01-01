@@ -1,10 +1,9 @@
-use std::time::Duration;
-
 use ash::version::DeviceV1_0;
 use ash::vk::{self, Fence, Result as VkError, Semaphore};
 use thiserror::Error;
 
 use crate::device::Device;
+use crate::timeout::Timeout;
 
 // Fence creation and destruction
 
@@ -28,23 +27,6 @@ impl Device<'_> {
 }
 
 // Fence wait
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum Timeout {
-  None,
-  Some(Duration),
-  Infinite,
-}
-
-impl Into<u64> for Timeout {
-  fn into(self) -> u64 {
-    match self {
-      Timeout::None => 0,
-      Timeout::Some(ref d) => 1_000_000_000u64 * d.as_secs() + u64::from(d.subsec_nanos()),
-      Timeout::Infinite => u64::max_value(),
-    }
-  }
-}
 
 #[derive(Error, Debug)]
 #[error("Failed to wait for fences")]

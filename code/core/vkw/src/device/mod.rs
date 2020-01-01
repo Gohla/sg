@@ -60,7 +60,6 @@ pub struct DeviceFeaturesQuery {
 impl DeviceFeaturesQuery {
   pub fn new() -> Self { Self::default() }
 
-
   pub fn want_extension<S: Into<CString>>(&mut self, name: S) {
     self.wanted_extensions.insert(name.into());
   }

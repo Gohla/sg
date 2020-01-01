@@ -52,9 +52,8 @@ pub fn create_swapchain_loader(device: &Device) -> SwapchainLoader {
 pub fn create_swapchain<'a, S: Into<(u32, u32)>>(
   loader: &'a SwapchainLoader,
   device: &'a Device,
-  surface: &Surface,
+  surface: &'a Surface,
   surface_size: S,
-  old_swapchain: Option<Swapchain>
 ) -> Result<Swapchain<'a>> {
   let features_query = {
     let mut query = SwapchainFeaturesQuery::new();
@@ -68,5 +67,5 @@ pub fn create_swapchain<'a, S: Into<(u32, u32)>>(
     query
   };
   let (width, height) = surface_size.into();
-  Ok(Swapchain::new(loader, device, surface, features_query, Extent2D { width, height }, old_swapchain)?)
+  Ok(Swapchain::new(loader, device, surface, features_query, Extent2D { width, height }, None)?)
 }
