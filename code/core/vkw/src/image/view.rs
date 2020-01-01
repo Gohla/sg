@@ -2,15 +2,13 @@ use ash::version::DeviceV1_0;
 use ash::vk::{self, Format, Image, ImageAspectFlags, ImageView, ImageViewType, Result as VkError};
 use thiserror::Error;
 
-use crate::prelude::Device;
+use crate::device::Device;
 
 #[derive(Error, Debug)]
-pub enum ImageViewCreateError {
-  #[error("Failed to create image view")]
-  ImageViewCreateFail(#[source] VkError),
-}
+#[error("Failed to create image view")]
+pub struct ImageViewCreateError(#[from] VkError);
 
-impl Device<'_, '_> {
+impl Device<'_> {
   pub fn create_image_view(
     &self,
     image: Image,
@@ -19,8 +17,6 @@ impl Device<'_, '_> {
     aspect_mask: ImageAspectFlags,
     layer_count: u32,
   ) -> Result<ImageView, ImageViewCreateError> {
-    use ImageViewCreateError::*;
-
     let create_info = vk::ImageViewCreateInfo::builder()
       .image(image)
       .view_type(view_type)
@@ -32,10 +28,10 @@ impl Device<'_, '_> {
         base_array_layer: 0,
         layer_count,
       });
-    Ok(unsafe { self.wrapped.create_image_view(&create_info, None) }.map_err(|e| ImageViewCreateFail(e))?)
+    Ok(unsafe { self.wrapped.create_image_view(&create_info, None) }?)
   }
 
-  pub fn destroy_image_view(&self, image_view: ImageView) {
-    unsafe { self.wrapped.destroy_image_view(image_view, None); }
+  pub unsafe fn destroy_image_view(&self, image_view: ImageView) {
+    self.wrapped.destroy_image_view(image_view, None);
   }
 }

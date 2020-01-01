@@ -5,7 +5,6 @@ use ash::extensions::ext::DebugReport as VkDebugReport;
 use ash::vk::{self, DebugReportCallbackEXT, DebugReportFlagsEXT, DebugReportObjectTypeEXT, Result as VkError};
 use byte_strings::c_str;
 
-use crate::entry::Entry;
 use crate::instance::InstanceFeatures;
 
 use super::{Instance, InstanceFeaturesQuery};
@@ -20,13 +19,13 @@ pub struct DebugReport {
 // Creation
 
 impl DebugReport {
-  pub fn new(entry: &Entry, instance: &Instance) -> Result<Self, VkError> {
+  pub fn new(instance: &Instance) -> Result<Self, VkError> {
     use vk::DebugReportCallbackCreateInfoEXT;
 
     let info = DebugReportCallbackCreateInfoEXT::builder()
       .flags(DebugReportFlagsEXT::ERROR | DebugReportFlagsEXT::WARNING | DebugReportFlagsEXT::PERFORMANCE_WARNING)
       .pfn_callback(Some(vulkan_debug_callback));
-    let loader = VkDebugReport::new(&entry.wrapped, &instance.wrapped);
+    let loader = VkDebugReport::new(&instance.entry.wrapped, &instance.wrapped);
     let callback = unsafe { loader.create_debug_report_callback(&info, None) }?;
     Ok(Self { loader, callback })
   }

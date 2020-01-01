@@ -7,12 +7,12 @@ use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
 use thiserror::Error;
 
-use crate::entry::Entry;
 use crate::instance::{Instance, InstanceFeatures, InstanceFeaturesQuery};
 
 // Wrapper
 
-pub struct Surface {
+pub struct Surface<'a> {
+  pub instance: &'a Instance,
   pub loader: SurfaceLoader,
   pub wrapped: SurfaceKHR,
 }
@@ -27,14 +27,14 @@ pub enum SurfaceCreateError {
   SurfaceCreateFail(#[source] VkError)
 }
 
-impl Surface {
-  pub fn new(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
-    let loader = SurfaceLoader::new(&entry.wrapped, &instance.wrapped);
-    let surface = Self::create_surface(entry, instance, window)?;
-    Ok(Self { loader, wrapped: surface })
+impl<'a> Surface<'a> {
+  pub fn new(instance: &'a Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
+    let loader = SurfaceLoader::new(&instance.entry.wrapped, &instance.wrapped);
+    let surface = Self::create_surface(instance, window)?;
+    Ok(Self { instance, loader, wrapped: surface })
   }
 
-  fn create_surface(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
+  fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
     use SurfaceCreateError::*;
     use std::ptr;
     use std::os::raw::c_void;
@@ -50,7 +50,7 @@ impl Surface {
           hinstance: handle.hinstance,
           hwnd: handle.hwnd as *const c_void,
         };
-        let loader = Win32Surface::new(&entry.wrapped, &instance.wrapped);
+        let loader = Win32Surface::new(&instance.entry.wrapped, &instance.wrapped);
         let surface = unsafe { loader.create_win32_surface(&create_info, None) }
           .map_err(|e| SurfaceCreateFail(e))?;
         Ok(surface)
@@ -92,7 +92,7 @@ pub enum SurfaceFormatError {
   NoSuitableSurfaceFormatFound,
 }
 
-impl Surface {
+impl Surface<'_> {
   pub fn get_suitable_surface_format(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR, SurfaceFormatError> {
     use SurfaceFormatError::*;
     let surface_formats = unsafe { self.loader.get_physical_device_surface_formats(physical_device, self.wrapped) }
@@ -117,7 +117,7 @@ impl Surface {
 
 // Implementations
 
-impl Deref for Surface {
+impl Deref for Surface<'_> {
   type Target = SurfaceKHR;
 
   #[inline]
@@ -125,9 +125,11 @@ impl Deref for Surface {
 }
 
 
-impl Drop for Surface {
+impl Drop for Surface<'_> {
   fn drop(&mut self) {
-    unsafe { self.loader.destroy_surface(self.wrapped, None); }
+    unsafe {
+      self.loader.destroy_surface(self.wrapped, None);
+    }
   }
 }
 

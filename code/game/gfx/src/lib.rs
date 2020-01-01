@@ -8,7 +8,7 @@ pub fn create_entry() -> Result<Entry> {
   Ok(Entry::new()?)
 }
 
-pub fn create_instance(entry: &Entry) -> Result<Instance> {
+pub fn create_instance(entry: Entry) -> Result<Instance> {
   let features_query = {
     let mut query = InstanceFeaturesQuery::new();
     query.require_validation_layer();
@@ -27,19 +27,17 @@ pub fn create_instance(entry: &Entry) -> Result<Instance> {
   Ok(instance)
 }
 
-pub fn create_debug_report(entry: &Entry, instance: &Instance) -> Result<DebugReport> {
-  Ok(DebugReport::new(entry, instance)?)
+pub fn create_debug_report(instance: &Instance) -> Result<DebugReport> {
+  Ok(DebugReport::new(instance)?)
 }
 
-pub fn create_surface(entry: &Entry, instance: &Instance, window: RawWindowHandle) -> Result<Surface> {
-  Ok(Surface::new(entry, instance, window)?)
+pub fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<Surface> {
+  Ok(Surface::new(instance, window)?)
 }
 
-pub fn create_device<'e, 'i>(instance: &'i Instance<'e>, surface: &Surface) -> Result<Device<'e, 'i>> {
+pub fn create_device<'a>(instance: &'a Instance, surface: &Surface) -> Result<Device<'a>> {
   let features_query = {
     let mut query = DeviceFeaturesQuery::new();
-    query.require_graphics_queue();
-    query.require_present_queue();
     query.require_swapchain_extension();
     query.require_features(PhysicalDeviceFeatures::builder().build());
     query
@@ -47,17 +45,17 @@ pub fn create_device<'e, 'i>(instance: &'i Instance<'e>, surface: &Surface) -> R
   Ok(Device::new(instance, features_query, Some(surface))?)
 }
 
-pub fn create_swapchain_loader(instance: &Instance, device: &Device) -> SwapchainLoader {
-  SwapchainLoader::new(instance, device)
+pub fn create_swapchain_loader(device: &Device) -> SwapchainLoader {
+  SwapchainLoader::new(&device.instance, device)
 }
 
-pub fn create_swapchain<'l, 'd, 'e, 'i, S: Into<(u32, u32)>>(
-  loader: &'l SwapchainLoader,
-  device: &'d Device<'e, 'i>,
+pub fn create_swapchain<'a, S: Into<(u32, u32)>>(
+  loader: &'a SwapchainLoader,
+  device: &'a Device,
   surface: &Surface,
   surface_size: S,
   old_swapchain: Option<Swapchain>
-) -> Result<Swapchain<'l, 'd, 'e, 'i>> {
+) -> Result<Swapchain<'a>> {
   let features_query = {
     let mut query = SwapchainFeaturesQuery::new();
     query.want_image_count(2);

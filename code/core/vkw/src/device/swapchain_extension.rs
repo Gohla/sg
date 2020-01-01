@@ -17,9 +17,9 @@ pub struct SwapchainLoader {
   pub wrapped: VkSwapchainLoader,
 }
 
-pub struct Swapchain<'l, 'd, 'e, 'i> {
-  pub loader: &'l SwapchainLoader,
-  pub device: &'d Device<'e, 'i>,
+pub struct Swapchain<'a> {
+  pub loader: &'a SwapchainLoader,
+  pub device: &'a Device<'a>,
   pub wrapped: SwapchainKHR,
   pub image_views: Vec<ImageView>,
   pub features: SwapchainFeatures,
@@ -79,10 +79,10 @@ pub enum SwapchainCreateError {
   SwapchainImageViewsCreateFail(#[from] ImageViewCreateError),
 }
 
-impl<'l, 'd, 'e, 'i> Swapchain<'l, 'd, 'e, 'i> {
+impl<'a> Swapchain<'a> {
   pub fn new(
-    loader: &'l SwapchainLoader,
-    device: &'d Device<'e, 'i>,
+    loader: &'a SwapchainLoader,
+    device: &'a Device,
     surface: &Surface,
     features_query: SwapchainFeaturesQuery,
     surface_extent: vk::Extent2D,
@@ -102,14 +102,13 @@ impl<'l, 'd, 'e, 'i> Swapchain<'l, 'd, 'e, 'i> {
       (std::u32::MAX, std::u32::MAX) => surface_extent,
       _ => capabilities.current_extent,
     };
-    let (sharing_mode, queue_family_indices) = if let (Some(graphics), Some(present)) = (device.graphics_queue_index, device.present_queue_index) {
+    let (sharing_mode, queue_family_indices) = {
+      let (graphics, present) = (device.graphics_queue_index, device.present_queue_index);
       if graphics == present {
         (SharingMode::EXCLUSIVE, vec![])
       } else {
         (SharingMode::CONCURRENT, vec![graphics, present])
       }
-    } else {
-      (SharingMode::EXCLUSIVE, vec![])
     };
     let pre_transform = if capabilities.supported_transforms.contains(SurfaceTransformFlagsKHR::IDENTITY) {
       SurfaceTransformFlagsKHR::IDENTITY
@@ -211,14 +210,14 @@ impl Deref for SwapchainLoader {
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl Deref for Swapchain<'_, '_, '_, '_> {
+impl Deref for Swapchain<'_> {
   type Target = SwapchainKHR;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl Drop for Swapchain<'_, '_, '_, '_> {
+impl Drop for Swapchain<'_> {
   fn drop(&mut self) {
     unsafe {
       for image_view in &self.image_views {

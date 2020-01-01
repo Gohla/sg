@@ -5,3 +5,6 @@ pub mod entry;
 pub mod instance;
 pub mod device;
 pub mod image;
+pub mod command_pool;
+pub mod sync;
+pub mod render;

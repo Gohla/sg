@@ -17,8 +17,8 @@ pub mod surface_extension;
 
 // Wrapper
 
-pub struct Instance<'e> {
-  pub entry: &'e Entry,
+pub struct Instance {
+  pub entry: Entry,
   pub wrapped: VkInstance,
   pub features: InstanceFeatures,
 }
@@ -91,9 +91,9 @@ pub enum InstanceCreateError {
   DebugReportCallbackCreateFail(#[source] VkError),
 }
 
-impl<'e> Instance<'e> {
+impl Instance {
   pub fn new(
-    entry: &'e Entry,
+    entry: Entry,
     application_name: Option<&CStr>,
     application_version: Option<VkVersion>,
     engine_name: Option<&CStr>,
@@ -153,14 +153,14 @@ impl<'e> Instance<'e> {
 
 // Implementations
 
-impl Deref for Instance<'_> {
+impl Deref for Instance {
   type Target = VkInstance;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl Drop for Instance<'_> {
+impl Drop for Instance {
   fn drop(&mut self) {
     unsafe { self.wrapped.destroy_instance(None); }
   }
