@@ -1,16 +1,18 @@
 //! # Safety
 //!
-//! Usage of `Swapchain` is unsafe because the `Instance`, `Device`, and `Surface` that was used to create the swapchain
-//! may be destroyed before the surface is destroyed. Safe usage prohibits:
+//! Safe usage prohibits:
 //!
-//! * Calling methods of `Swapchain` when the creating `Instance`, `Device`, or `Surface` has been destroyed.
-//! * Dropping `Swapchain` when the creating `Instance`, `Device`, or `Surface` has been destroyed.
+//! * Calling methods or getting fields of [`Swapchain`] when its creating [`Instance`], [`Device`], or [`Surface`] has been destroyed.
+//! * Calling methods or getting fields of [`Swapchain`] after it has been [destroyed](Swapchain::destroy).
+//!
+//! # Destruction
+//!
+//! A [`Swapchain`] must be manually destroyed with [`Swapchain::destroy`].
 
 use std::ffi::CStr;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as SwapchainLoader;
-use ash::version::DeviceV1_0;
 use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
 use log::trace;
@@ -26,7 +28,6 @@ use crate::timeout::Timeout;
 
 pub struct Swapchain {
   loader: SwapchainLoader,
-  device: ash::Device,
   pub wrapped: SwapchainKHR,
   pub image_views: Vec<ImageView>,
   pub extent: Extent2D,
@@ -43,7 +44,7 @@ pub struct SwapchainFeatures {
   pub present_mode: PresentModeKHR,
 }
 
-// Creation
+// Creation and destruction
 
 #[derive(Default, Clone, Debug)]
 pub struct SwapchainFeaturesQuery {
@@ -89,6 +90,14 @@ impl Swapchain {
   ) -> Result<Self, SwapchainCreateError> {
     let loader = SwapchainLoader::new(&instance.wrapped, &device.wrapped);
     Self::new_internal(loader, device, surface, features_query, surface_extent, None)
+  }
+
+  pub unsafe fn destroy(&mut self, device: &Device) {
+    trace!("Destroying swapchain {:?}", self.wrapped);
+    for image_view in &self.image_views {
+      device.destroy_image_view(*image_view);
+    }
+    self.loader.destroy_swapchain(self.wrapped, None);
   }
 
   fn new_internal(
@@ -176,7 +185,6 @@ impl Swapchain {
 
     Ok(Self {
       loader,
-      device: device.wrapped.clone(),
       wrapped: swapchain,
       image_views,
       extent,
@@ -204,7 +212,7 @@ impl Swapchain {
 // API
 
 impl Swapchain {
-  pub fn recreate(
+  pub unsafe fn recreate(
     &mut self,
     device: &Device,
     surface: &Surface,
@@ -219,6 +227,7 @@ impl Swapchain {
       Some(&self),
     )?;
     std::mem::swap(self, &mut new_swapchain);
+    new_swapchain.destroy(device);
     Ok(())
   }
 }
@@ -266,18 +275,6 @@ impl Deref for Swapchain {
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
-}
-
-impl Drop for Swapchain {
-  fn drop(&mut self) {
-    trace!("Destroying swapchain {:?}", self.wrapped);
-    unsafe {
-      for image_view in &self.image_views {
-        self.device.destroy_image_view(*image_view, None);
-      }
-      self.loader.destroy_swapchain(self.wrapped, None);
-    }
-  }
 }
 
 // Extension name

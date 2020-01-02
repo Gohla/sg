@@ -1,5 +1,3 @@
-use std::mem::ManuallyDrop;
-
 use anyhow::{Context, Result};
 use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
@@ -7,11 +5,11 @@ use raw_window_handle::RawWindowHandle;
 use vkw::prelude::*;
 
 pub struct GfxDevice {
-  pub instance: ManuallyDrop<Instance>,
-  pub debug_report: ManuallyDrop<Option<DebugReport>>,
-  pub surface: ManuallyDrop<Surface>,
-  pub device: ManuallyDrop<Device>,
-  pub swapchain: ManuallyDrop<Swapchain>,
+  pub instance: Instance,
+  pub debug_report: Option<DebugReport>,
+  pub surface: Surface,
+  pub device: Device,
+  pub swapchain: Swapchain,
 }
 
 impl GfxDevice {
@@ -53,7 +51,8 @@ impl GfxDevice {
         query.require_features(PhysicalDeviceFeatures::builder().build());
         query
       };
-      Device::new(&instance, features_query, Some(&surface))?
+      Device::new(&instance, features_query, Some(&surface))
+        .with_context(|| "Failed to create VKW device")?
     };
 
     let swapchain = {
@@ -69,15 +68,16 @@ impl GfxDevice {
         query
       };
       let (width, height) = surface_size.into();
-      Swapchain::new(&instance, &device, &surface, features_query, Extent2D { width, height })?
+      Swapchain::new(&instance, &device, &surface, features_query, Extent2D { width, height })
+        .with_context(|| "Failed to create VKW swapchain")?
     };
 
     Ok(Self {
-      instance: ManuallyDrop::new(instance),
-      surface: ManuallyDrop::new(surface),
-      debug_report: ManuallyDrop::new(debug_report),
-      device: ManuallyDrop::new(device),
-      swapchain: ManuallyDrop::new(swapchain),
+      instance,
+      surface,
+      debug_report,
+      device,
+      swapchain,
     })
   }
 }
@@ -85,11 +85,13 @@ impl GfxDevice {
 impl Drop for GfxDevice {
   fn drop(&mut self) {
     unsafe {
-      ManuallyDrop::drop(&mut self.swapchain);
-      ManuallyDrop::drop(&mut self.device);
-      ManuallyDrop::drop(&mut self.surface);
-      ManuallyDrop::drop(&mut self.debug_report);
-      ManuallyDrop::drop(&mut self.instance);
+      self.swapchain.destroy(&self.device);
+      self.device.destroy();
+      self.surface.destroy();
+      if let Some(debug_report) = &mut self.debug_report {
+        debug_report.destroy();
+      }
+      self.instance.destroy();
     }
   }
 }

@@ -5,8 +5,8 @@ use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, Offset2D, Rect2D, Rend
 
 use crate::device::Device;
 use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain};
-use crate::timeout::Timeout;
 use crate::instance::surface_extension::Surface;
+use crate::timeout::Timeout;
 
 // Presenter
 
@@ -80,7 +80,7 @@ impl Presenter {
       return Ok(());
     }
     let new_extent = self.signal_surface_resize.get().unwrap_or(self.swapchain.extent);
-    self.swapchain.recreate(device, surface, new_extent)?;
+    unsafe { self.swapchain.recreate(device, surface, new_extent) }?;
     let framebuffers = (self.create_framebuffers_fn)(&self.swapchain, render_pass)?;
     self.swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     self.signal_surface_resize.set(None);

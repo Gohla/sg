@@ -1,4 +1,13 @@
-// Wrapper
+//! # Safety
+//!
+//! Safe usage prohibits:
+//!
+//! * Calling methods or getting fields of [`Device`] when its creating [`Instance`] has been destroyed.
+//! * Calling methods or getting fields of [`Device`] after it has been [destroyed](Device::destroy).
+//!
+//! # Destruction
+//!
+//! A [`Device`] must be manually destroyed with [`Device::destroy`].
 
 use std::borrow::Borrow;
 use std::collections::HashSet;
@@ -48,7 +57,7 @@ impl DeviceFeatures {
   }
 }
 
-// Creation
+// Creation and destruction
 
 #[derive(Default, Debug)]
 pub struct DeviceFeaturesQuery {
@@ -186,6 +195,11 @@ impl Device {
     }
     Err(NoSuitablePhysicalDeviceFound)
   }
+
+  pub unsafe fn destroy(&mut self) {
+    trace!("Destroying device {:?}", self.wrapped.handle());
+    self.wrapped.destroy_device(None);
+  }
 }
 
 // Implementations
@@ -195,13 +209,4 @@ impl Deref for Device {
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
-}
-
-impl Drop for Device {
-  fn drop(&mut self) {
-    trace!("Destroying device {:?}", self.wrapped.handle());
-    unsafe {
-      self.wrapped.destroy_device(None);
-    }
-  }
 }

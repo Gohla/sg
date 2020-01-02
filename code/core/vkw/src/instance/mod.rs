@@ -1,3 +1,13 @@
+//! # Safety
+//!
+//! Safe usage prohibits:
+//!
+//! * Calling methods or getting fields of [`Instance`] after it has been [destroyed](Instance::destroy).
+//!
+//! # Destruction
+//!
+//! An [`Instance`] must be manually destroyed with [`Instance::destroy`].
+
 use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::ffi::{CStr, CString};
@@ -44,7 +54,7 @@ impl InstanceFeatures {
   }
 }
 
-// Creation
+// Creation and destruction
 
 #[derive(Default, Debug)]
 pub struct InstanceFeaturesQuery {
@@ -148,6 +158,11 @@ impl Instance {
 
     Ok(Self { entry, wrapped: instance, features })
   }
+
+  pub unsafe fn destroy(&mut self) {
+    trace!("Destroying instance {:?}", self.wrapped.handle());
+    self.wrapped.destroy_instance(None);
+  }
 }
 
 // Implementations
@@ -157,11 +172,4 @@ impl Deref for Instance {
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
-}
-
-impl Drop for Instance {
-  fn drop(&mut self) {
-    trace!("Destroying instance {:?}", self.wrapped.handle());
-    unsafe { self.wrapped.destroy_instance(None); }
-  }
 }

@@ -34,7 +34,7 @@ fn run(mut event_loop: EventLoop<()>, window: Window, gfx_device: &mut GfxDevice
         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
         WindowEvent::Resized(window_size) => {
           let (width, height) = window_size.into();
-          gfx_device.swapchain.recreate(&gfx_device.device, &gfx_device.surface, Extent2D { width, height })
+          unsafe { gfx_device.swapchain.recreate(&gfx_device.device, &gfx_device.surface, Extent2D { width, height }) }
             .with_context(|| "Failed to recreate GFX swapchain").unwrap();
         }
         _ => *control_flow = ControlFlow::Wait,

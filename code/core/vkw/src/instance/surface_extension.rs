@@ -1,10 +1,13 @@
 //! # Safety
 //!
-//! Usage of `Surface` is unsafe because the `Instance` that was used to create the surface may be destroyed before the
-//! surface is destroyed. Safe usage prohibits:
+//! Safe usage prohibits:
 //!
-//! * Calling methods of `Surface` when the creating `Instance` has been destroyed.
-//! * Dropping `Surface` when the creating `Instance` has been destroyed.
+//! * Calling methods or getting fields of [`Surface`] when its creating [`Instance`] has been destroyed.
+//! * Calling methods or getting fields of [`Surface`] after it has been [destroyed](Surface::destroy).
+//!
+//! # Destruction
+//!
+//! A [`Surface`] must be manually destroyed with [`Surface::destroy`].
 
 use std::ffi::CStr;
 use std::ops::Deref;
@@ -25,7 +28,7 @@ pub struct Surface {
   pub wrapped: SurfaceKHR,
 }
 
-// Creation
+// Creation and destruction
 
 #[derive(Error, Debug)]
 pub enum SurfaceCreateError {
@@ -40,6 +43,11 @@ impl Surface {
     let loader = SurfaceLoader::new(&instance.entry.wrapped, &instance.wrapped);
     let surface = Self::create_surface(instance, window)?;
     Ok(Self { loader, wrapped: surface })
+  }
+
+  pub unsafe fn destroy(&mut self) {
+    trace!("Destroying surface {:?}", self.wrapped);
+    self.loader.destroy_surface(self.wrapped, None);
   }
 
   fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
@@ -130,16 +138,6 @@ impl Deref for Surface {
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
-}
-
-
-impl Drop for Surface {
-  fn drop(&mut self) {
-    trace!("Destroying surface {:?}", self.wrapped);
-    unsafe {
-      self.loader.destroy_surface(self.wrapped, None);
-    }
-  }
 }
 
 // Extension names

@@ -1,6 +1,6 @@
 [package]
 name = "vkw"
-description = "Lightweight wrapper around ash Vulkan bindings, currently assuming single Vulkan entry/instance/device and a simple (2D) graphics rendering pipeline"
+description = "Lightweight (still very unsafe) wrapper around ash Vulkan bindings, currently assuming a simple (2D) graphics rendering pipeline"
 version = "0.1.0"
 authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
 edition = "2018"

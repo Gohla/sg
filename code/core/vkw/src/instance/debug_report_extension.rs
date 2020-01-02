@@ -1,3 +1,14 @@
+//! # Safety
+//!
+//! Safe usage prohibits:
+//!
+//! * Calling methods of [`DebugReport`] when its creating [`Instance`] has been destroyed.
+//! * Calling methods of [`DebugReport`] after it has been [destroyed](DebugReport::destroy).
+//!
+//! # Destruction
+//!
+//! A [`DebugReport`] must be manually destroyed with [`DebugReport::destroy`].
+
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_void};
 
@@ -17,7 +28,7 @@ pub struct DebugReport {
   callback: DebugReportCallbackEXT,
 }
 
-// Creation
+// Creation and destruction
 
 impl DebugReport {
   pub fn new(instance: &Instance) -> Result<Self, VkError> {
@@ -29,6 +40,11 @@ impl DebugReport {
     let loader = VkDebugReport::new(&instance.entry.wrapped, &instance.wrapped);
     let callback = unsafe { loader.create_debug_report_callback(&info, None) }?;
     Ok(Self { loader, callback })
+  }
+
+  pub unsafe fn destroy(&mut self) {
+    trace!("Destroying debug report callback {:?}", self.callback);
+    self.loader.destroy_debug_report_callback(self.callback, None);
   }
 }
 
@@ -47,15 +63,6 @@ impl InstanceFeaturesQuery {
 impl InstanceFeatures {
   pub fn is_debug_report_extension_enabled(&self) -> bool {
     self.is_extension_enabled(self::DEBUG_REPORT_EXTENSION_NAME)
-  }
-}
-
-// Implementations
-
-impl Drop for DebugReport {
-  fn drop(&mut self) {
-    trace!("Destroying debug report callback {:?}", self.callback);
-    unsafe { self.loader.destroy_debug_report_callback(self.callback, None); }
   }
 }
 
