@@ -1,10 +1,13 @@
 use std::cell::Cell;
 
 use ash::version::DeviceV1_0;
-use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, Offset2D, Rect2D, RenderPass, Semaphore, Viewport};
+use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, ImageView, Offset2D, Rect2D, RenderPass, Semaphore, Viewport};
+use log::trace;
+use thiserror::Error;
 
 use crate::device::Device;
-use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain};
+use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain, SwapchainCreateError};
+use crate::framebuffer::FramebufferCreateError;
 use crate::instance::surface_extension::Surface;
 use crate::timeout::Timeout;
 
@@ -13,7 +16,6 @@ use crate::timeout::Timeout;
 pub struct Presenter {
   pub swapchain: Swapchain,
   pub swapchain_image_states: Box<[SwapchainImageState]>,
-  pub create_framebuffers_fn: CreateFramebuffersFn,
   pub signal_surface_resize: Cell<Option<Extent2D>>,
   pub signal_suboptimal_swapchain: Cell<bool>,
 }
@@ -23,25 +25,50 @@ pub struct SwapchainImageState {
   pub framebuffer: Framebuffer,
 }
 
-pub type CreateFramebuffersFn = Box<dyn Fn(&Swapchain, &RenderPass) -> Result<Vec<Framebuffer>, Box<dyn std::error::Error>>>;
-
-// Creation
+// Creation and destruction
 
 impl Presenter {
   pub fn new(
+    device: &Device,
     swapchain: Swapchain,
     render_pass: &RenderPass,
-    create_framebuffers_fn: CreateFramebuffersFn,
-  ) -> Result<Self, Box<dyn std::error::Error>> {
-    let framebuffers = create_framebuffers_fn(&swapchain, render_pass)?;
+    additional_framebuffer_attachments: &[ImageView],
+  ) -> Result<Self, FramebufferCreateError> {
+    let framebuffers = Self::create_framebuffers(device, &swapchain, render_pass, additional_framebuffer_attachments)?;
     let swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     Ok(Self {
       swapchain,
       swapchain_image_states,
-      create_framebuffers_fn,
       signal_surface_resize: Cell::new(None),
       signal_suboptimal_swapchain: Cell::new(false)
     })
+  }
+
+  pub unsafe fn destroy(&mut self, device: &Device) {
+    trace!("Destroying presenter");
+    for image_state in self.swapchain_image_states.iter() {
+      device.destroy_framebuffer(image_state.framebuffer);
+    }
+    self.swapchain.destroy(device)
+  }
+
+  fn create_framebuffers(device: &Device, swapchain: &Swapchain, render_pass: &RenderPass, additional_framebuffer_attachments: &[ImageView]) -> Result<Vec<Framebuffer>, FramebufferCreateError> {
+    swapchain.image_views.iter().map(|v| {
+      let attachments = {
+        let mut vec = vec![*v];
+        vec.extend_from_slice(additional_framebuffer_attachments);
+        vec
+      };
+      let create_info = vk::FramebufferCreateInfo::builder()
+        .render_pass(*render_pass)
+        .attachments(&attachments)
+        .width(swapchain.extent.width)
+        .height(swapchain.extent.height)
+        .layers(1)
+        .build()
+        ;
+      Ok(device.create_framebuffer(&create_info)?)
+    }).collect()
   }
 
   fn create_swapchain_image_states(framebuffers: Vec<Framebuffer>) -> Box<[SwapchainImageState]> {
@@ -56,6 +83,14 @@ impl Presenter {
 }
 
 // API
+
+#[derive(Debug, Error)]
+pub enum PresenterRecreateError {
+  #[error("Failed to recreate swapchain")]
+  SwapchainRecreateFail(#[from] SwapchainCreateError),
+  #[error("Failed to recreate framebuffers")]
+  FramebuffersRecreateFail(#[from] FramebufferCreateError),
+}
 
 impl Presenter {
   pub fn should_recreate(&self) -> bool {
@@ -75,13 +110,15 @@ impl Presenter {
     device: &Device,
     surface: &Surface,
     render_pass: &RenderPass,
-  ) -> Result<(), Box<dyn std::error::Error>> {
+    additional_framebuffer_attachments: &[ImageView],
+  ) -> Result<(), PresenterRecreateError> {
     if !self.should_recreate() {
       return Ok(());
     }
     let new_extent = self.signal_surface_resize.get().unwrap_or(self.swapchain.extent);
     unsafe { self.swapchain.recreate(device, surface, new_extent) }?;
-    let framebuffers = (self.create_framebuffers_fn)(&self.swapchain, render_pass)?;
+    // TODO: destroy old framebuffers.
+    let framebuffers = Self::create_framebuffers(device, &self.swapchain, render_pass, additional_framebuffer_attachments)?;
     self.swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     self.signal_surface_resize.set(None);
     self.signal_suboptimal_swapchain.set(false);

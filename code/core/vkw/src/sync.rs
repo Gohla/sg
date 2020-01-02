@@ -12,13 +12,13 @@ use crate::timeout::Timeout;
 pub struct FenceCreateError(#[from] VkError);
 
 impl Device {
-  pub fn create_fence(&self, signaled: bool) -> Result<Fence, FenceCreateError> {
+  pub unsafe fn create_fence(&self, signaled: bool) -> Result<Fence, FenceCreateError> {
     use vk::{FenceCreateFlags, FenceCreateInfo};
     let flags = if signaled { FenceCreateFlags::SIGNALED } else { FenceCreateFlags::empty() };
     let create_info = FenceCreateInfo::builder()
       .flags(flags)
       ;
-    Ok(unsafe { self.wrapped.create_fence(&create_info, None) }?)
+    Ok(self.wrapped.create_fence(&create_info, None)?)
   }
 
   pub unsafe fn destroy_fence(&self, fence: Fence) {
@@ -65,10 +65,10 @@ impl Device {
 pub struct SemaphoreCreateError(#[from] VkError);
 
 impl Device {
-  pub fn create_semaphore(&self) -> Result<Semaphore, SemaphoreCreateError> {
+  pub unsafe fn create_semaphore(&self) -> Result<Semaphore, SemaphoreCreateError> {
     use vk::SemaphoreCreateInfo;
     let create_info = SemaphoreCreateInfo::builder();
-    Ok(unsafe { self.wrapped.create_semaphore(&create_info, None) }?)
+    Ok(self.wrapped.create_semaphore(&create_info, None)?)
   }
 
   pub unsafe fn destroy_semaphore(&self, semaphore: Semaphore) {
@@ -83,7 +83,7 @@ impl Device {
 pub struct WaitIdleError(#[from] VkError);
 
 impl Device {
-  pub fn wait_idle(&self) -> Result<(), WaitIdleError> {
-    Ok(unsafe { self.wrapped.device_wait_idle() }?)
+  pub unsafe fn wait_idle(&self) -> Result<(), WaitIdleError> {
+    Ok(self.wrapped.device_wait_idle()?)
   }
 }

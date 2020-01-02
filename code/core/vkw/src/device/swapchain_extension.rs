@@ -10,6 +10,7 @@
 //! A [`Swapchain`] must be manually destroyed with [`Swapchain::destroy`].
 
 use std::ffi::CStr;
+use std::num::NonZeroU32;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as SwapchainLoader;
@@ -46,19 +47,25 @@ pub struct SwapchainFeatures {
 
 // Creation and destruction
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct SwapchainFeaturesQuery {
-  wanted_image_count: u32,
+  wanted_image_count: NonZeroU32,
   wanted_present_modes_ord: Vec<PresentModeKHR>,
 }
 
 impl SwapchainFeaturesQuery {
   pub fn new() -> Self { Self::default() }
 
-  pub fn want_image_count(&mut self, image_count: u32) { self.wanted_image_count = image_count; }
+  pub fn want_image_count(&mut self, image_count: NonZeroU32) { self.wanted_image_count = image_count; }
 
   pub fn want_present_mode(&mut self, present_modes_ord: Vec<PresentModeKHR>) {
     self.wanted_present_modes_ord = present_modes_ord;
+  }
+}
+
+impl Default for SwapchainFeaturesQuery {
+  fn default() -> Self {
+    Self { wanted_image_count: unsafe { NonZeroU32::new_unchecked(1) }, wanted_present_modes_ord: Vec::new() }
   }
 }
 
@@ -113,9 +120,10 @@ impl Swapchain {
 
     let capabilities = unsafe { surface.get_capabilities(device.physical_device) }
       .map_err(|e| SurfaceCapabilitiesFail(e))?;
+    let wanted_image_count = features_query.wanted_image_count.get();
     let min_image_count = match capabilities.max_image_count {
-      0 => max(capabilities.min_image_count, features_query.wanted_image_count),
-      max_image_count => max(capabilities.min_image_count, min(features_query.wanted_image_count, max_image_count)),
+      0 => max(capabilities.min_image_count, wanted_image_count),
+      max_image_count => max(capabilities.min_image_count, min(wanted_image_count, max_image_count)),
     };
     let surface_format = unsafe { surface.get_suitable_surface_format(device.physical_device) }?;
     let extent = match (capabilities.current_extent.width, capabilities.current_extent.height) {

@@ -1,6 +1,6 @@
-use std::num::NonZeroUsize;
+use std::fmt::Debug;
+use std::num::NonZeroU32;
 
-use ash::version::DeviceV1_0;
 use ash::vk::{CommandPool, Fence, Semaphore};
 use thiserror::Error;
 
@@ -19,7 +19,6 @@ pub struct Renderer<T> {
 }
 
 pub struct RenderState {
-  device: ash::Device,
   pub command_pool: CommandPool,
   pub image_acquired_semaphore: Semaphore,
   pub render_complete_semaphore: Semaphore,
@@ -27,43 +26,47 @@ pub struct RenderState {
   // TODO: track buffer allocations
 }
 
-// Creation
-
-#[derive(Error, Debug)]
-pub enum RenderCreateError {
-  #[error("Failed to create command pool")]
-  RenderStateCommandPoolCreateFail(#[from] CommandPoolCreateError),
-  #[error("Failed to create command pool")]
-  RenderStateImageAcquiredSemaphoreCreateFail(#[source] SemaphoreCreateError),
-  #[error("Failed to create command pool")]
-  RenderStateRenderCompleteSemaphoreCreateFail(#[source] SemaphoreCreateError),
-  #[error("Failed to create command pool")]
-  RenderStateRenderCompleteFenceCreateFail(#[from] FenceCreateError),
-  #[error("Failed to create command pool")]
-  CustomRenderStateCreateFail(#[from] Box<dyn std::error::Error>),
+pub trait CustomRenderState {
+  unsafe fn destroy(&mut self, device: &Device, render_state: &RenderState);
 }
 
-impl<T> Renderer<T> {
-  pub fn new<F: Fn(&RenderState) -> Result<T, Box<dyn std::error::Error>>>(
-    &self,
+// Creation and destruction
+
+#[derive(Error, Debug)]
+pub enum RenderCreateError<E: std::error::Error + 'static> {
+  #[error("Failed to create command pool")]
+  CommandPoolCreateFail(#[from] CommandPoolCreateError),
+  #[error("Failed to create image acquired semaphore")]
+  ImageAcquiredSemaphoreCreateFail(#[source] SemaphoreCreateError),
+  #[error("Failed to create render complete semaphore")]
+  RenderCompleteSemaphoreCreateFail(#[source] SemaphoreCreateError),
+  #[error("Failed to create render complete fence")]
+  RenderCompleteFenceCreateFail(#[from] FenceCreateError),
+  #[error("Failed to create custom render state")]
+  CustomRenderStateCreateFail(#[source] E),
+}
+
+impl<T: CustomRenderState> Renderer<T> {
+  pub fn new<E: std::error::Error + 'static, F: Fn(&RenderState) -> Result<T, E>>(
     device: &Device,
-    state_count: NonZeroUsize,
+    state_count: NonZeroU32,
     create_custom_state: F
-  ) -> Result<Renderer<T>, RenderCreateError> {
+  ) -> Result<Renderer<T>, RenderCreateError<E>> {
     use RenderCreateError::*;
-    let count = state_count.get();
+    let count = state_count.get() as usize;
     let (states, states_custom) = {
       let mut states = Vec::with_capacity(count);
       let mut states_custom: Vec<T> = Vec::with_capacity(count);
       for _i in 0..count {
-        let state = RenderState {
-          device: device.wrapped.clone(),
-          command_pool: device.create_command_pool(false, false)?,
-          image_acquired_semaphore: device.create_semaphore().map_err(|e| RenderStateImageAcquiredSemaphoreCreateFail(e))?,
-          render_complete_semaphore: device.create_semaphore().map_err(|e| RenderStateRenderCompleteSemaphoreCreateFail(e))?,
-          render_complete_fence: device.create_fence(true)?,
+        let state = unsafe {
+          RenderState {
+            command_pool: device.create_command_pool(false, false)?,
+            image_acquired_semaphore: device.create_semaphore().map_err(|e| ImageAcquiredSemaphoreCreateFail(e))?,
+            render_complete_semaphore: device.create_semaphore().map_err(|e| RenderCompleteSemaphoreCreateFail(e))?,
+            render_complete_fence: device.create_fence(true)?,
+          }
         };
-        let state_custom = create_custom_state(&state)?;
+        let state_custom = create_custom_state(&state).map_err(|e| CustomRenderStateCreateFail(e))?;
         states.push(state);
         states_custom.push(state_custom);
       }
@@ -76,6 +79,16 @@ impl<T> Renderer<T> {
       states,
       states_custom,
     })
+  }
+
+  pub unsafe fn destroy(&mut self, device: &Device) {
+    for (state, state_custom) in self.states.iter().zip(self.states_custom.iter_mut()) {
+      state_custom.destroy(&device, state);
+      device.destroy_command_pool(state.command_pool);
+      device.destroy_semaphore(state.image_acquired_semaphore);
+      device.destroy_semaphore(state.render_complete_semaphore);
+      device.destroy_fence(state.render_complete_fence);
+    }
   }
 }
 
@@ -110,18 +123,5 @@ impl RenderState {
       // TODO: clear allocated buffers
     }
     Ok(())
-  }
-}
-
-// Implementations
-
-impl Drop for RenderState {
-  fn drop(&mut self) {
-    unsafe {
-      self.device.destroy_command_pool(self.command_pool, None);
-      self.device.destroy_semaphore(self.image_acquired_semaphore, None);
-      self.device.destroy_semaphore(self.render_complete_semaphore, None);
-      self.device.destroy_fence(self.render_complete_fence, None);
-    }
   }
 }

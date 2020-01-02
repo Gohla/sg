@@ -11,8 +11,8 @@ use crate::device::Device;
 pub struct RenderPassCreateError(#[from] VkError);
 
 impl Device {
-  pub fn create_render_pass(&self, create_info: &RenderPassCreateInfo) -> Result<RenderPass, RenderPassCreateError> {
-    Ok(unsafe { self.wrapped.create_render_pass(create_info, None) }?)
+  pub unsafe fn create_render_pass(&self, create_info: &RenderPassCreateInfo) -> Result<RenderPass, RenderPassCreateError> {
+    Ok(self.wrapped.create_render_pass(create_info, None)?)
   }
 
   pub unsafe fn destroy_render_pass(&self, render_pass: RenderPass) {

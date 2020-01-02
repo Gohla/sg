@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use anyhow::{Context, Result};
 use raw_window_handle::HasRawWindowHandle;
 use winit::{
@@ -7,9 +9,8 @@ use winit::{
 };
 use winit::platform::desktop::EventLoopExtDesktop;
 use winit::window::Window;
-use vkw::prelude::*;
 
-use gfx::{GfxDevice};
+use gfx::Gfx;
 
 fn main() -> Result<()> {
   simple_logger::init()
@@ -19,24 +20,20 @@ fn main() -> Result<()> {
   let window = WindowBuilder::new().build(&event_loop)
     .with_context(|| "Failed to create window")?;
 
-  let mut gfx_device = GfxDevice::new(cfg!(debug_assertions), window.raw_window_handle(), window.inner_size())
+  let mut gfx = Gfx::new(cfg!(debug_assertions), unsafe { NonZeroU32::new_unchecked(2) }, window.raw_window_handle(), window.inner_size())
     .with_context(|| "Failed to create GFX instance")?;
 
-  run(event_loop, window, &mut gfx_device)?;
+  run(event_loop, window, &mut gfx)?;
 
   Ok(())
 }
 
-fn run(mut event_loop: EventLoop<()>, window: Window, gfx_device: &mut GfxDevice) -> Result<()> {
+fn run(mut event_loop: EventLoop<()>, window: Window, gfx: &mut Gfx) -> Result<()> {
   Ok(event_loop.run_return(move |event, _, control_flow| {
     match event {
       Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-        WindowEvent::Resized(window_size) => {
-          let (width, height) = window_size.into();
-          unsafe { gfx_device.swapchain.recreate(&gfx_device.device, &gfx_device.surface, Extent2D { width, height }) }
-            .with_context(|| "Failed to recreate GFX swapchain").unwrap();
-        }
+        WindowEvent::Resized(window_size) => gfx.surface_size_changed(window_size),
         _ => *control_flow = ControlFlow::Wait,
       },
       _ => *control_flow = ControlFlow::Wait,
