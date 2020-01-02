@@ -10,7 +10,7 @@ use crate::device::Device;
 #[error("Failed to create render pass")]
 pub struct RenderPassCreateError(#[from] VkError);
 
-impl Device<'_> {
+impl Device {
   pub fn create_render_pass(&self, create_info: &RenderPassCreateInfo) -> Result<RenderPass, RenderPassCreateError> {
     Ok(unsafe { self.wrapped.create_render_pass(create_info, None) }?)
   }

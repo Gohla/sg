@@ -6,12 +6,12 @@ use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, Offset2D, Rect2D, Rend
 use crate::device::Device;
 use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain};
 use crate::timeout::Timeout;
+use crate::instance::surface_extension::Surface;
 
 // Presenter
 
-pub struct Presenter<'a> {
-  pub device: &'a Device<'a>,
-  pub swapchain: Swapchain<'a>,
+pub struct Presenter {
+  pub swapchain: Swapchain,
   pub swapchain_image_states: Box<[SwapchainImageState]>,
   pub create_framebuffers_fn: CreateFramebuffersFn,
   pub signal_surface_resize: Cell<Option<Extent2D>>,
@@ -27,17 +27,15 @@ pub type CreateFramebuffersFn = Box<dyn Fn(&Swapchain, &RenderPass) -> Result<Ve
 
 // Creation
 
-impl<'a> Presenter<'a> {
+impl Presenter {
   pub fn new(
-    device: &'a Device<'a>,
-    swapchain: Swapchain<'a>,
+    swapchain: Swapchain,
     render_pass: &RenderPass,
     create_framebuffers_fn: CreateFramebuffersFn,
   ) -> Result<Self, Box<dyn std::error::Error>> {
     let framebuffers = create_framebuffers_fn(&swapchain, render_pass)?;
     let swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     Ok(Self {
-      device,
       swapchain,
       swapchain_image_states,
       create_framebuffers_fn,
@@ -59,7 +57,7 @@ impl<'a> Presenter<'a> {
 
 // API
 
-impl Presenter<'_> {
+impl Presenter {
   pub fn should_recreate(&self) -> bool {
     return !self.signal_surface_resize.get().is_none() || self.signal_suboptimal_swapchain.get();
   }
@@ -74,13 +72,15 @@ impl Presenter<'_> {
 
   pub fn recreate(
     &mut self,
+    device: &Device,
+    surface: &Surface,
     render_pass: &RenderPass,
   ) -> Result<(), Box<dyn std::error::Error>> {
     if !self.should_recreate() {
       return Ok(());
     }
     let new_extent = self.signal_surface_resize.get().unwrap_or(self.swapchain.extent);
-    self.swapchain.recreate(new_extent)?;
+    self.swapchain.recreate(device, surface, new_extent)?;
     let framebuffers = (self.create_framebuffers_fn)(&self.swapchain, render_pass)?;
     self.swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     self.signal_surface_resize.set(None);
@@ -93,8 +93,8 @@ impl Presenter<'_> {
     return Rect2D { offset: Offset2D::default(), extent: self.swapchain.extent };
   }
 
-  pub unsafe fn set_dynamic_state(&self, command_buffer: CommandBuffer) {
-    self.device.cmd_set_viewport(command_buffer, 0, &[Viewport {
+  pub unsafe fn set_dynamic_state(&self, device: &Device, command_buffer: CommandBuffer) {
+    device.cmd_set_viewport(command_buffer, 0, &[Viewport {
       x: 0.0,
       y: 0.0,
       width: self.swapchain.extent.width as f32,
@@ -102,7 +102,7 @@ impl Presenter<'_> {
       min_depth: 0.0,
       max_depth: 1.0,
     }]);
-    self.device.cmd_set_scissor(command_buffer, 0, &[self.full_render_area()]);
+    device.cmd_set_scissor(command_buffer, 0, &[self.full_render_area()]);
   }
 
   pub fn acquire_image_state(&self, image_acquired_semaphore: Option<Semaphore>) -> Result<&SwapchainImageState, AcquireNextImageError> {
@@ -113,14 +113,14 @@ impl Presenter<'_> {
     Ok(&self.swapchain_image_states[swapchain_image_index as usize])
   }
 
-  pub fn present(&self, swapchain_image_state: &SwapchainImageState, wait_semaphores: &[Semaphore]) -> Result<(), QueuePresentError> {
+  pub fn present(&self, device: &Device, swapchain_image_state: &SwapchainImageState, wait_semaphores: &[Semaphore]) -> Result<(), QueuePresentError> {
     let swapchains = &[self.swapchain.wrapped];
     let image_indices = &[swapchain_image_state.index];
     let present_info = vk::PresentInfoKHR::builder()
       .wait_semaphores(wait_semaphores)
       .swapchains(swapchains)
       .image_indices(image_indices);
-    let suboptimal_swapchain = unsafe { self.swapchain.queue_present(self.device.present_queue, &present_info)? };
+    let suboptimal_swapchain = unsafe { self.swapchain.queue_present(device.present_queue, &present_info)? };
     if suboptimal_swapchain {
       self.signal_suboptimal_swapchain();
     }

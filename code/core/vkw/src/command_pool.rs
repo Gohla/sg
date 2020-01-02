@@ -10,7 +10,7 @@ use crate::device::Device;
 #[error("Failed to create command pool")]
 pub struct CommandPoolCreateError(#[from] VkError);
 
-impl Device<'_> {
+impl Device {
   pub fn create_command_pool(&self, transient: bool, reset_individual_buffers: bool) -> Result<CommandPool, CommandPoolCreateError> {
     use vk::{CommandPoolCreateFlags, CommandPoolCreateInfo};
     let flags = {
@@ -38,7 +38,7 @@ impl Device<'_> {
 #[error("Failed to reset command pool")]
 pub struct CommandPoolResetError(#[from] VkError);
 
-impl Device<'_> {
+impl Device {
   pub unsafe fn reset_command_pool(&self, command_pool: CommandPool, release_resources: bool) -> Result<(), CommandPoolResetError> {
     use vk::CommandPoolResetFlags;
     let flags = {

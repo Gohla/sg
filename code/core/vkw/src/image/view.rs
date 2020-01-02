@@ -8,7 +8,7 @@ use crate::device::Device;
 #[error("Failed to create image view")]
 pub struct ImageViewCreateError(#[from] VkError);
 
-impl Device<'_> {
+impl Device {
   pub fn create_image_view(
     &self,
     image: Image,

@@ -1,3 +1,11 @@
+//! # Safety
+//!
+//! Usage of `Surface` is unsafe because the `Instance` that was used to create the surface may be destroyed before the
+//! surface is destroyed. Safe usage prohibits:
+//!
+//! * Calling methods of `Surface` when the creating `Instance` has been destroyed.
+//! * Dropping `Surface` when the creating `Instance` has been destroyed.
+
 use std::ffi::CStr;
 use std::ops::Deref;
 
@@ -92,11 +100,6 @@ pub enum SurfaceFormatError {
   NoSuitableSurfaceFormatFound,
 }
 
-/// # Safety
-///
-/// The `Surface` methods are unsafe because the following properties must be upheld by the user:
-///
-/// * The `Instance` that created the surface must not have been destroyed.
 impl Surface {
   pub unsafe fn get_suitable_surface_format(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR, SurfaceFormatError> {
     use SurfaceFormatError::*;

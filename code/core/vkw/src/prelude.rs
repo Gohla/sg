@@ -7,7 +7,7 @@ pub use ash::{
 };
 
 pub use crate::{
-  device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery, SwapchainLoader}},
+  device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},
   entry::Entry,
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface}
 };

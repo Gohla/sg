@@ -22,8 +22,7 @@ pub mod swapchain_extension;
 
 // Wrapper
 
-pub struct Device<'a> {
-  pub instance: &'a Instance,
+pub struct Device {
   pub wrapped: VkDevice,
   pub physical_device: VkPhysicalDevice,
   pub graphics_queue_index: u32,
@@ -91,9 +90,9 @@ pub enum PhysicalDeviceCreateError {
   NoSuitablePhysicalDeviceFound,
 }
 
-impl<'a> Device<'a> {
+impl Device {
   pub fn new(
-    instance: &'a Instance,
+    instance: &Instance,
     features_query: DeviceFeaturesQuery,
     required_surface_support: Option<&Surface>,
   ) -> Result<Self, PhysicalDeviceCreateError> {
@@ -176,7 +175,6 @@ impl<'a> Device<'a> {
       let present_queue = unsafe { device.get_device_queue(present_queue_index, 0) };
       let features = DeviceFeatures::new(enabled_extensions, required_features);
       return Ok(Self {
-        instance,
         wrapped: device,
         physical_device,
         graphics_queue_index,
@@ -192,14 +190,14 @@ impl<'a> Device<'a> {
 
 // Implementations
 
-impl Deref for Device<'_> {
+impl Deref for Device {
   type Target = VkDevice;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl Drop for Device<'_> {
+impl Drop for Device {
   fn drop(&mut self) {
     trace!("Destroying device {:?}", self.wrapped.handle());
     unsafe {

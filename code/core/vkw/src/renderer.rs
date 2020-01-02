@@ -1,5 +1,6 @@
 use std::num::NonZeroUsize;
 
+use ash::version::DeviceV1_0;
 use ash::vk::{CommandPool, Fence, Semaphore};
 use thiserror::Error;
 
@@ -10,15 +11,15 @@ use crate::timeout::Timeout;
 
 // Renderer
 
-pub struct Renderer<'a, T> {
+pub struct Renderer<T> {
   count: usize,
   index: usize,
-  states: Box<[RenderState<'a>]>,
+  states: Box<[RenderState]>,
   states_custom: Box<[T]>,
 }
 
-pub struct RenderState<'a> {
-  device: &'a Device<'a>,
+pub struct RenderState {
+  device: ash::Device,
   pub command_pool: CommandPool,
   pub image_acquired_semaphore: Semaphore,
   pub render_complete_semaphore: Semaphore,
@@ -42,10 +43,10 @@ pub enum RenderCreateError {
   CustomRenderStateCreateFail(#[from] Box<dyn std::error::Error>),
 }
 
-impl<'a, T> Renderer<'a, T> {
+impl<T> Renderer<T> {
   pub fn new<F: Fn(&RenderState) -> Result<T, Box<dyn std::error::Error>>>(
     &self,
-    device: &'a Device,
+    device: &Device,
     state_count: NonZeroUsize,
     create_custom_state: F
   ) -> Result<Renderer<T>, RenderCreateError> {
@@ -56,7 +57,7 @@ impl<'a, T> Renderer<'a, T> {
       let mut states_custom: Vec<T> = Vec::with_capacity(count);
       for _i in 0..count {
         let state = RenderState {
-          device,
+          device: device.wrapped.clone(),
           command_pool: device.create_command_pool(false, false)?,
           image_acquired_semaphore: device.create_semaphore().map_err(|e| RenderStateImageAcquiredSemaphoreCreateFail(e))?,
           render_complete_semaphore: device.create_semaphore().map_err(|e| RenderStateRenderCompleteSemaphoreCreateFail(e))?,
@@ -80,11 +81,11 @@ impl<'a, T> Renderer<'a, T> {
 
 // API
 
-impl<'a, T> Renderer<'a, T> {
-  pub fn next_render_state(&mut self) -> Result<(&mut RenderState<'a>, &T), RenderStateWaitAndResetError> {
+impl<T> Renderer<T> {
+  pub fn next_render_state(&mut self, device: &Device) -> Result<(&mut RenderState, &T), RenderStateWaitAndResetError> {
     self.index = (self.index + 1) % self.count;
     let state = &mut self.states[self.index];
-    state.wait_and_reset()?;
+    state.wait_and_reset(device)?;
     let state_custom = &self.states_custom[self.index];
     return Ok((state, state_custom));
   }
@@ -100,12 +101,12 @@ pub enum RenderStateWaitAndResetError {
   CommandPoolResetFail(#[from] CommandPoolResetError),
 }
 
-impl RenderState<'_> {
-  pub fn wait_and_reset(&mut self) -> Result<(), RenderStateWaitAndResetError> {
+impl RenderState {
+  pub fn wait_and_reset(&mut self, device: &Device) -> Result<(), RenderStateWaitAndResetError> {
     unsafe {
-      self.device.wait_for_fence(self.render_complete_fence, Timeout::Infinite)?;
-      self.device.reset_fence(self.render_complete_fence)?;
-      self.device.reset_command_pool(self.command_pool, false)?;
+      device.wait_for_fence(self.render_complete_fence, Timeout::Infinite)?;
+      device.reset_fence(self.render_complete_fence)?;
+      device.reset_command_pool(self.command_pool, false)?;
       // TODO: clear allocated buffers
     }
     Ok(())
@@ -114,13 +115,13 @@ impl RenderState<'_> {
 
 // Implementations
 
-impl Drop for RenderState<'_> {
+impl Drop for RenderState {
   fn drop(&mut self) {
     unsafe {
-      self.device.destroy_command_pool(self.command_pool);
-      self.device.destroy_semaphore(self.image_acquired_semaphore);
-      self.device.destroy_semaphore(self.render_complete_semaphore);
-      self.device.destroy_fence(self.render_complete_fence);
+      self.device.destroy_command_pool(self.command_pool, None);
+      self.device.destroy_semaphore(self.image_acquired_semaphore, None);
+      self.device.destroy_semaphore(self.render_complete_semaphore, None);
+      self.device.destroy_fence(self.render_complete_fence, None);
     }
   }
 }

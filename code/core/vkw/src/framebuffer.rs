@@ -10,7 +10,7 @@ use crate::device::Device;
 #[error("Failed to create framebuffer")]
 pub struct FramebufferCreateError(#[from] VkError);
 
-impl Device<'_> {
+impl Device {
   pub fn create_framebuffer(&self, create_info: &FramebufferCreateInfo) -> Result<Framebuffer, FramebufferCreateError> {
     Ok(unsafe { self.wrapped.create_framebuffer(create_info, None) }?)
   }

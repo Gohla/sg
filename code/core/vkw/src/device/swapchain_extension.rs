@@ -1,7 +1,16 @@
+//! # Safety
+//!
+//! Usage of `Swapchain` is unsafe because the `Instance`, `Device`, and `Surface` that was used to create the swapchain
+//! may be destroyed before the surface is destroyed. Safe usage prohibits:
+//!
+//! * Calling methods of `Swapchain` when the creating `Instance`, `Device`, or `Surface` has been destroyed.
+//! * Dropping `Swapchain` when the creating `Instance`, `Device`, or `Surface` has been destroyed.
+
 use std::ffi::CStr;
 use std::ops::Deref;
 
-use ash::extensions::khr::Swapchain as VkSwapchainLoader;
+use ash::extensions::khr::Swapchain as SwapchainLoader;
+use ash::version::DeviceV1_0;
 use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
 use log::trace;
@@ -15,14 +24,9 @@ use crate::timeout::Timeout;
 
 // Wrapper
 
-pub struct SwapchainLoader {
-  pub wrapped: VkSwapchainLoader,
-}
-
-pub struct Swapchain<'a> {
-  pub loader: &'a SwapchainLoader,
-  pub surface: &'a Surface,
-  pub device: &'a Device<'a>,
+pub struct Swapchain {
+  loader: SwapchainLoader,
+  device: ash::Device,
   pub wrapped: SwapchainKHR,
   pub image_views: Vec<ImageView>,
   pub extent: Extent2D,
@@ -40,13 +44,6 @@ pub struct SwapchainFeatures {
 }
 
 // Creation
-
-impl SwapchainLoader {
-  pub fn new(instance: &Instance, device: &Device) -> SwapchainLoader {
-    let loader = VkSwapchainLoader::new(&instance.wrapped, &device.wrapped);
-    Self { wrapped: loader }
-  }
-}
 
 #[derive(Default, Clone, Debug)]
 pub struct SwapchainFeaturesQuery {
@@ -82,11 +79,22 @@ pub enum SwapchainCreateError {
   SwapchainImageViewsCreateFail(#[from] ImageViewCreateError),
 }
 
-impl<'a> Swapchain<'a> {
+impl Swapchain {
   pub fn new(
-    loader: &'a SwapchainLoader,
-    device: &'a Device,
-    surface: &'a Surface,
+    instance: &Instance,
+    device: &Device,
+    surface: &Surface,
+    features_query: SwapchainFeaturesQuery,
+    surface_extent: Extent2D,
+  ) -> Result<Self, SwapchainCreateError> {
+    let loader = SwapchainLoader::new(&instance.wrapped, &device.wrapped);
+    Self::new_internal(loader, device, surface, features_query, surface_extent, None)
+  }
+
+  fn new_internal(
+    loader: SwapchainLoader,
+    device: &Device,
+    surface: &Surface,
     features_query: SwapchainFeaturesQuery,
     surface_extent: Extent2D,
     old_swapchain: Option<&Swapchain>
@@ -166,7 +174,15 @@ impl<'a> Swapchain<'a> {
       present_mode,
     };
 
-    Ok(Self { loader, surface, device, wrapped: swapchain, image_views, extent, features_query, features })
+    Ok(Self {
+      loader,
+      device: device.wrapped.clone(),
+      wrapped: swapchain,
+      image_views,
+      extent,
+      features_query,
+      features
+    })
   }
 
   fn select_present_mode(available_present_modes: Vec<PresentModeKHR>, wanted_present_modes_ord: Vec<PresentModeKHR>) -> Option<PresentModeKHR> {
@@ -187,9 +203,21 @@ impl<'a> Swapchain<'a> {
 
 // API
 
-impl Swapchain<'_> {
-  pub fn recreate(&mut self, surface_extent: Extent2D) -> Result<(), SwapchainCreateError> {
-    let mut new_swapchain = Self::new(self.loader, self.device, self.surface, self.features_query.clone(), surface_extent, Some(&self))?;
+impl Swapchain {
+  pub fn recreate(
+    &mut self,
+    device: &Device,
+    surface: &Surface,
+    surface_extent: Extent2D
+  ) -> Result<(), SwapchainCreateError> {
+    let mut new_swapchain = Self::new_internal(
+      self.loader.clone(),
+      device,
+      surface,
+      self.features_query.clone(),
+      surface_extent,
+      Some(&self),
+    )?;
     std::mem::swap(self, &mut new_swapchain);
     Ok(())
   }
@@ -199,7 +227,7 @@ impl Swapchain<'_> {
 #[error("Failed to acquire next image from swapchain")]
 pub struct AcquireNextImageError(#[from] VkError);
 
-impl Swapchain<'_> {
+impl Swapchain {
   pub unsafe fn acquire_next_image(&self, timeout: Timeout, semaphore: Option<Semaphore>, fence: Option<Fence>) -> Result<(u32, bool), AcquireNextImageError> {
     Ok(self.loader.acquire_next_image(self.wrapped, timeout.into(), semaphore.unwrap_or_default(), fence.unwrap_or_default())?)
   }
@@ -209,7 +237,7 @@ impl Swapchain<'_> {
 #[error("Failed to acquire next image from swapchain")]
 pub struct QueuePresentError(#[from] VkError);
 
-impl Swapchain<'_> {
+impl Swapchain {
   pub unsafe fn queue_present(&self, queue: Queue, create_info: &vk::PresentInfoKHR) -> Result<bool, QueuePresentError> {
     Ok(self.loader.queue_present(queue, create_info)?)
   }
@@ -233,26 +261,19 @@ impl DeviceFeaturesQuery {
 
 // Implementations
 
-impl Deref for SwapchainLoader {
-  type Target = VkSwapchainLoader;
-
-  #[inline]
-  fn deref(&self) -> &Self::Target { &self.wrapped }
-}
-
-impl Deref for Swapchain<'_> {
+impl Deref for Swapchain {
   type Target = SwapchainKHR;
 
   #[inline]
   fn deref(&self) -> &Self::Target { &self.wrapped }
 }
 
-impl Drop for Swapchain<'_> {
+impl Drop for Swapchain {
   fn drop(&mut self) {
     trace!("Destroying swapchain {:?}", self.wrapped);
     unsafe {
       for image_view in &self.image_views {
-        self.device.destroy_image_view(*image_view);
+        self.device.destroy_image_view(*image_view, None);
       }
       self.loader.destroy_swapchain(self.wrapped, None);
     }
