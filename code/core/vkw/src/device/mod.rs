@@ -12,6 +12,7 @@ use ash::{
   vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, QueueFlags, Result as VkError},
   vk::Queue
 };
+use log::trace;
 use thiserror::Error;
 
 use crate::instance::Instance;
@@ -200,6 +201,7 @@ impl Deref for Device<'_> {
 
 impl Drop for Device<'_> {
   fn drop(&mut self) {
+    trace!("Destroying device {:?}", self.wrapped.handle());
     unsafe {
       self.wrapped.destroy_device(None);
     }

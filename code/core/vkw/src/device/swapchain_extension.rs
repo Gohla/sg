@@ -4,6 +4,7 @@ use std::ops::Deref;
 use ash::extensions::khr::Swapchain as VkSwapchainLoader;
 use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
+use log::trace;
 use thiserror::Error;
 
 use crate::device::{Device, DeviceFeatures, DeviceFeaturesQuery};
@@ -20,7 +21,7 @@ pub struct SwapchainLoader {
 
 pub struct Swapchain<'a> {
   pub loader: &'a SwapchainLoader,
-  pub surface: &'a Surface<'a>,
+  pub surface: &'a Surface,
   pub device: &'a Device<'a>,
   pub wrapped: SwapchainKHR,
   pub image_views: Vec<ImageView>,
@@ -93,13 +94,13 @@ impl<'a> Swapchain<'a> {
     use SwapchainCreateError::*;
     use std::cmp::{min, max};
 
-    let capabilities = surface.get_capabilities(device.physical_device)
+    let capabilities = unsafe { surface.get_capabilities(device.physical_device) }
       .map_err(|e| SurfaceCapabilitiesFail(e))?;
     let min_image_count = match capabilities.max_image_count {
       0 => max(capabilities.min_image_count, features_query.wanted_image_count),
       max_image_count => max(capabilities.min_image_count, min(features_query.wanted_image_count, max_image_count)),
     };
-    let surface_format = surface.get_suitable_surface_format(device.physical_device)?;
+    let surface_format = unsafe { surface.get_suitable_surface_format(device.physical_device) }?;
     let extent = match (capabilities.current_extent.width, capabilities.current_extent.height) {
       (std::u32::MAX, std::u32::MAX) => surface_extent,
       _ => capabilities.current_extent,
@@ -118,7 +119,7 @@ impl<'a> Swapchain<'a> {
       capabilities.current_transform
     };
     let present_mode = {
-      let available_present_modes = surface.get_present_modes(device.physical_device)
+      let available_present_modes = unsafe { surface.get_present_modes(device.physical_device) }
         .map_err(|e| SurfacePresentModesFail(e))?;
       Self::select_present_mode(available_present_modes, features_query.wanted_present_modes_ord.clone())
         .ok_or(NoPresentModeFound())?
@@ -248,6 +249,7 @@ impl Deref for Swapchain<'_> {
 
 impl Drop for Swapchain<'_> {
   fn drop(&mut self) {
+    trace!("Destroying swapchain {:?}", self.wrapped);
     unsafe {
       for image_view in &self.image_views {
         self.device.destroy_image_view(*image_view);

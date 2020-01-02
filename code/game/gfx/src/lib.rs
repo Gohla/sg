@@ -1,38 +1,63 @@
-use anyhow::Result;
+use std::mem::ManuallyDrop;
+
+use anyhow::{Context, Result};
 use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
 
 use vkw::prelude::*;
 
-pub fn create_entry() -> Result<Entry> {
-  Ok(Entry::new()?)
+pub struct GfxInstance {
+  pub instance: ManuallyDrop<Instance>,
+  pub debug_report: ManuallyDrop<Option<DebugReport>>,
+  pub surface: ManuallyDrop<Surface>,
 }
 
-pub fn create_instance(entry: Entry) -> Result<Instance> {
-  let features_query = {
-    let mut query = InstanceFeaturesQuery::new();
-    query.require_validation_layer();
-    query.require_surface();
-    query
-  };
-  let instance = Instance::new(
-    entry,
-    Some(c_str!("SG")),
-    None,
-    Some(c_str!("SG GFX")),
-    None,
-    None,
-    features_query
-  )?;
-  Ok(instance)
+impl GfxInstance {
+  pub fn new(require_validation_layer: bool, window: RawWindowHandle) -> Result<GfxInstance> {
+    let entry = Entry::new()
+      .with_context(|| "Failed to create VKW entry")?;
+    let instance = {
+      let features_query = {
+        let mut query = InstanceFeaturesQuery::new();
+        if require_validation_layer {
+          query.require_validation_layer();
+        }
+        query.require_surface();
+        query
+      };
+      let instance = Instance::new(
+        entry,
+        Some(c_str!("SG")),
+        None,
+        Some(c_str!("SG GFX")),
+        None,
+        None,
+        features_query
+      ).with_context(|| "Failed to create VKW instance")?;
+      instance
+    };
+    let debug_report = if require_validation_layer {
+      Some(DebugReport::new(&instance).with_context(|| "Failed to create VKW debug report")?)
+    } else {
+      None
+    };
+    let surface = Surface::new(&instance, window).with_context(|| "Failed to create VKW surface")?;
+    Ok(Self {
+      instance: ManuallyDrop::new(instance),
+      surface: ManuallyDrop::new(surface),
+      debug_report: ManuallyDrop::new(debug_report)
+    })
+  }
 }
 
-pub fn create_debug_report(instance: &Instance) -> Result<DebugReport> {
-  Ok(DebugReport::new(instance)?)
-}
-
-pub fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<Surface> {
-  Ok(Surface::new(instance, window)?)
+impl Drop for GfxInstance {
+  fn drop(&mut self) {
+    unsafe {
+      ManuallyDrop::drop(&mut self.surface);
+      ManuallyDrop::drop(&mut self.debug_report);
+      ManuallyDrop::drop(&mut self.instance);
+    }
+  }
 }
 
 pub fn create_device<'a>(instance: &'a Instance, surface: &Surface) -> Result<Device<'a>> {

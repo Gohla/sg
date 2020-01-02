@@ -4,6 +4,7 @@ use std::ops::Deref;
 use ash::extensions::khr::Surface as SurfaceLoader;
 use ash::vk::{self, Result as VkError, SurfaceKHR};
 use byte_strings::c_str;
+use log::trace;
 use raw_window_handle::RawWindowHandle;
 use thiserror::Error;
 
@@ -11,8 +12,7 @@ use crate::instance::{Instance, InstanceFeatures, InstanceFeaturesQuery};
 
 // Wrapper
 
-pub struct Surface<'a> {
-  pub instance: &'a Instance,
+pub struct Surface {
   pub loader: SurfaceLoader,
   pub wrapped: SurfaceKHR,
 }
@@ -27,11 +27,11 @@ pub enum SurfaceCreateError {
   SurfaceCreateFail(#[source] VkError)
 }
 
-impl<'a> Surface<'a> {
-  pub fn new(instance: &'a Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
+impl Surface {
+  pub fn new(instance: &Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
     let loader = SurfaceLoader::new(&instance.entry.wrapped, &instance.wrapped);
     let surface = Self::create_surface(instance, window)?;
-    Ok(Self { instance, loader, wrapped: surface })
+    Ok(Self { loader, wrapped: surface })
   }
 
   fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
@@ -92,10 +92,15 @@ pub enum SurfaceFormatError {
   NoSuitableSurfaceFormatFound,
 }
 
-impl Surface<'_> {
-  pub fn get_suitable_surface_format(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR, SurfaceFormatError> {
+/// # Safety
+///
+/// The `Surface` methods are unsafe because the following properties must be upheld by the user:
+///
+/// * The `Instance` that created the surface must not have been destroyed.
+impl Surface {
+  pub unsafe fn get_suitable_surface_format(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceFormatKHR, SurfaceFormatError> {
     use SurfaceFormatError::*;
-    let surface_formats = unsafe { self.loader.get_physical_device_surface_formats(physical_device, self.wrapped) }
+    let surface_formats = self.loader.get_physical_device_surface_formats(physical_device, self.wrapped)
       .map_err(|e| PhysicalDeviceSurfaceFormatsFail(e))?;
     for surface_format in surface_formats {
       // TODO: more sophisticated way to select suitable surface format.
@@ -106,18 +111,18 @@ impl Surface<'_> {
     Err(NoSuitableSurfaceFormatFound)
   }
 
-  pub fn get_capabilities(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceCapabilitiesKHR, VkError> {
-    unsafe { self.loader.get_physical_device_surface_capabilities(physical_device, self.wrapped) }
+  pub unsafe fn get_capabilities(&self, physical_device: vk::PhysicalDevice) -> Result<vk::SurfaceCapabilitiesKHR, VkError> {
+    self.loader.get_physical_device_surface_capabilities(physical_device, self.wrapped)
   }
 
-  pub fn get_present_modes(&self, physical_device: vk::PhysicalDevice) -> Result<Vec<vk::PresentModeKHR>, VkError> {
-    unsafe { self.loader.get_physical_device_surface_present_modes(physical_device, self.wrapped) }
+  pub unsafe fn get_present_modes(&self, physical_device: vk::PhysicalDevice) -> Result<Vec<vk::PresentModeKHR>, VkError> {
+    self.loader.get_physical_device_surface_present_modes(physical_device, self.wrapped)
   }
 }
 
 // Implementations
 
-impl Deref for Surface<'_> {
+impl Deref for Surface {
   type Target = SurfaceKHR;
 
   #[inline]
@@ -125,8 +130,9 @@ impl Deref for Surface<'_> {
 }
 
 
-impl Drop for Surface<'_> {
+impl Drop for Surface {
   fn drop(&mut self) {
+    trace!("Destroying surface {:?}", self.wrapped);
     unsafe {
       self.loader.destroy_surface(self.wrapped, None);
     }

@@ -4,6 +4,7 @@ use std::os::raw::{c_char, c_void};
 use ash::extensions::ext::DebugReport as VkDebugReport;
 use ash::vk::{self, DebugReportCallbackEXT, DebugReportFlagsEXT, DebugReportObjectTypeEXT, Result as VkError};
 use byte_strings::c_str;
+use log::trace;
 
 use crate::instance::InstanceFeatures;
 
@@ -53,6 +54,7 @@ impl InstanceFeatures {
 
 impl Drop for DebugReport {
   fn drop(&mut self) {
+    trace!("Destroying debug report callback {:?}", self.callback);
     unsafe { self.loader.destroy_debug_report_callback(self.callback, None); }
   }
 }

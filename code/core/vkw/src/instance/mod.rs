@@ -6,6 +6,7 @@ use std::ops::Deref;
 use ash::{Instance as VkInstance, InstanceError};
 use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk::{self, Result as VkError};
+use log::trace;
 use thiserror::Error;
 
 use crate::entry::Entry;
@@ -160,6 +161,7 @@ impl Deref for Instance {
 
 impl Drop for Instance {
   fn drop(&mut self) {
+    trace!("Destroying instance {:?}", self.wrapped.handle());
     unsafe { self.wrapped.destroy_instance(None); }
   }
 }
