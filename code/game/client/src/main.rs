@@ -34,6 +34,7 @@ fn run(mut event_loop: EventLoop<()>, window: Window, gfx: &mut Gfx) -> Result<(
       Event::WindowEvent { event, window_id } if window_id == window.id() => match event {
         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
         WindowEvent::Resized(window_size) => gfx.surface_size_changed(window_size),
+        WindowEvent::RedrawRequested => gfx.update().unwrap(),
         _ => *control_flow = ControlFlow::Wait,
       },
       _ => *control_flow = ControlFlow::Wait,

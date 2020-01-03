@@ -168,6 +168,8 @@ impl Swapchain {
     if let Some(old_swapchain) = old_swapchain {
       create_info = create_info.old_swapchain(old_swapchain.wrapped);
     }
+    let create_info = create_info.build();
+    trace!("Creating swapchain from {:?}", create_info);
     let swapchain = unsafe { loader.create_swapchain(&create_info, None) }
       .map_err(|e| SwapchainCreateFail(e))?;
 

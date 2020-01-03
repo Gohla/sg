@@ -145,6 +145,15 @@ impl Gfx {
     })
   }
 
+  pub fn update(&mut self) -> Result<()> {
+    if self.presenter.should_recreate() {
+      unsafe { self.device.wait_idle() }?;
+      self.presenter.recreate(&self.device, &self.surface, &self.render_pass, &[])?;
+    }
+
+    Ok(())
+  }
+
   pub fn surface_size_changed<S: Into<(u32, u32)>>(&mut self, surface_size: S) {
     let (width, height) = surface_size.into();
     self.presenter.signal_surface_resize(Extent2D { width, height });

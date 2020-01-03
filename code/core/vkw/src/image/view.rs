@@ -1,5 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::vk::{self, Format, Image, ImageAspectFlags, ImageView, ImageViewType, Result as VkError};
+use log::trace;
 use thiserror::Error;
 
 use crate::device::Device;
@@ -27,11 +28,14 @@ impl Device {
         level_count: 1,
         base_array_layer: 0,
         layer_count,
-      });
+      })
+      .build();
+    trace!("Creating image view from {:?}", create_info);
     Ok(unsafe { self.wrapped.create_image_view(&create_info, None) }?)
   }
 
   pub unsafe fn destroy_image_view(&self, image_view: ImageView) {
+    trace!("Destroying image view {:?}", image_view);
     self.wrapped.destroy_image_view(image_view, None);
   }
 }

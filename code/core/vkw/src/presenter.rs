@@ -115,9 +115,12 @@ impl Presenter {
     if !self.should_recreate() {
       return Ok(());
     }
+    trace!("Recreating presenter");
     let new_extent = self.signal_surface_resize.get().unwrap_or(self.swapchain.extent);
     unsafe { self.swapchain.recreate(device, surface, new_extent) }?;
-    // TODO: destroy old framebuffers.
+    for image_state in self.swapchain_image_states.iter() {
+      unsafe { device.destroy_framebuffer(image_state.framebuffer) };
+    }
     let framebuffers = Self::create_framebuffers(device, &self.swapchain, render_pass, additional_framebuffer_attachments)?;
     self.swapchain_image_states = Self::create_swapchain_image_states(framebuffers);
     self.signal_surface_resize.set(None);
