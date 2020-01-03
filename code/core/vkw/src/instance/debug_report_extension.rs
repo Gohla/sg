@@ -31,11 +31,11 @@ pub struct DebugReport {
 // Creation and destruction
 
 impl DebugReport {
-  pub fn new(instance: &Instance) -> Result<Self, VkError> {
+  pub fn new(instance: &Instance, flags: DebugReportFlagsEXT) -> Result<Self, VkError> {
     use vk::DebugReportCallbackCreateInfoEXT;
 
     let info = DebugReportCallbackCreateInfoEXT::builder()
-      .flags(DebugReportFlagsEXT::all())
+      .flags(flags)
       .pfn_callback(Some(vulkan_debug_callback));
     let loader = VkDebugReport::new(&instance.entry.wrapped, &instance.wrapped);
     let callback = unsafe { loader.create_debug_report_callback(&info, None) }?;

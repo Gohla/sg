@@ -13,5 +13,6 @@ util = {path = "../../core/util"}
 ash = "0.29"
 winit = "0.20.0-alpha5"
 raw-window-handle = "0.3"
+log = "0.4"
 simple_logger = "1.3"
 anyhow = "1.0"

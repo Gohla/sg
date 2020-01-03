@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
-use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, PipelineStageFlags, RenderPass};
+use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
 
@@ -55,14 +55,15 @@ impl Gfx {
         None,
         Some(c_str!("SG GFX")),
         None,
-        None,
+        Some(VkVersion::new(1, 1, 0)),
         features_query
       ).with_context(|| "Failed to create VKW instance")?;
       instance
     };
+    dbg!(&instance.features);
 
     let debug_report = if require_validation_layer {
-      Some(DebugReport::new(&instance).with_context(|| "Failed to create VKW debug report")?)
+      Some(DebugReport::new(&instance, DebugReportFlagsEXT::all() - DebugReportFlagsEXT::INFORMATION).with_context(|| "Failed to create VKW debug report")?)
     } else {
       None
     };
@@ -103,10 +104,11 @@ impl Gfx {
     })?;
 
     let render_pass = {
-      use vk::{AttachmentDescription, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, PipelineBindPoint, AttachmentReference, ImageLayout};
+      use vk::{AttachmentDescription, SampleCountFlags, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, PipelineBindPoint, AttachmentReference, ImageLayout};
       let attachments = vec![
         AttachmentDescription::builder()
           .format(swapchain.features.surface_format.format)
+          .samples(SampleCountFlags::TYPE_1)
           .load_op(AttachmentLoadOp::CLEAR)
           .store_op(AttachmentStoreOp::STORE)
           .stencil_load_op(AttachmentLoadOp::DONT_CARE)
@@ -157,6 +159,8 @@ impl Gfx {
     // Recreate surface-extent dependent items if needed.
     if let Some(extent) = self.surface_change_handler.query_surface_change(self.swapchain.extent) {
       unsafe {
+        self.device.device_wait_idle()
+          .with_context(|| "Failed to wait for device idle before recreating surface-extent dependent items")?;
         self.swapchain.recreate(&self.device, &self.surface, extent)
           .with_context(|| "Failed to recreate VKW swapchain")?;
         let framebuffers = Self::create_framebuffers(&self.device, &self.swapchain, &self.render_pass)
@@ -173,7 +177,7 @@ impl Gfx {
     let command_buffer = game_render_state.command_buffer;
 
     // Acquire swapchain image.
-    let swapchain_image_state = self.presenter.acquire_image_state(&self.swapchain, Some(render_state.image_acquired_semaphore), &self.surface_change_handler)
+    let swapchain_image_state = self.presenter.acquire_image_state(&self.swapchain, Some(render_state.image_acquired_semaphore), &mut self.surface_change_handler)
       .with_context(|| "Failed to acquire swapchain image state")?;
 
     unsafe {
@@ -199,10 +203,14 @@ impl Gfx {
     }
 
     // Present: take rendered swapchain image and present to the user.
-    self.presenter.present(&self.device, &self.swapchain, swapchain_image_state, &[render_state.render_complete_semaphore], &self.surface_change_handler)
+    self.presenter.present(&self.device, &self.swapchain, swapchain_image_state, &[render_state.render_complete_semaphore], &mut self.surface_change_handler)
       .with_context(|| "Failed to present")?;
 
     Ok(())
+  }
+
+  pub fn wait_idle(&self) -> Result<()> {
+    Ok(unsafe { self.device.device_wait_idle() }.with_context(|| "Failed to wait for device idle")?)
   }
 
   pub fn surface_size_changed<S: Into<(u32, u32)>>(&mut self, surface_size: S) {

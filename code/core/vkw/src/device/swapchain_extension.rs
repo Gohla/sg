@@ -14,9 +14,9 @@ use std::num::NonZeroU32;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as SwapchainLoader;
-use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
+use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR, CompositeAlphaFlagsKHR};
 use byte_strings::c_str;
-use log::trace;
+use log::debug;
 use thiserror::Error;
 
 use crate::device::{Device, DeviceFeatures, DeviceFeaturesQuery};
@@ -73,15 +73,17 @@ impl Default for SwapchainFeaturesQuery {
 pub enum SwapchainCreateError {
   #[error("Failed to get surface format")]
   SurfaceFormatFail(#[from] SurfaceFormatError),
-  #[error("Failed to get surface capabilities")]
+  #[error("Failed to get surface capabilities: {0:?}")]
   SurfaceCapabilitiesFail(#[source] VkError),
-  #[error("Failed to get surface present modes")]
+  #[error("Failed to find support composite alpha mode")]
+  NoCompositeAlphaModeFound(),
+  #[error("Failed to get surface present modes: {0:?}")]
   SurfacePresentModesFail(#[source] VkError),
   #[error("Failed to find present mode")]
   NoPresentModeFound(),
-  #[error("Failed to create swapchain")]
+  #[error("Failed to create swapchain: {0:?}")]
   SwapchainCreateFail(#[source] VkError),
-  #[error("Failed to get swapchain images")]
+  #[error("Failed to get swapchain images: {0:?}")]
   SwapchainImagesFail(#[source] VkError),
   #[error("Failed to create image views for swapchain images")]
   SwapchainImageViewsCreateFail(#[from] ImageViewCreateError),
@@ -100,7 +102,7 @@ impl Swapchain {
   }
 
   pub unsafe fn destroy(&mut self, device: &Device) {
-    trace!("Destroying swapchain {:?}", self.wrapped);
+    debug!("Destroying swapchain {:?}", self.wrapped);
     for image_view in &self.image_views {
       device.destroy_image_view(*image_view);
     }
@@ -130,6 +132,14 @@ impl Swapchain {
       (std::u32::MAX, std::u32::MAX) => surface_extent,
       _ => capabilities.current_extent,
     };
+    let extent = {
+      let min = capabilities.min_image_extent;
+      let max = capabilities.max_image_extent;
+      let width = if extent.width < min.width { min.width } else if extent.width > max.width { max.width } else { extent.width };
+      let height = if extent.height < min.height { min.height } else if extent.height > max.height { max.height } else { extent.height };
+      Extent2D { width, height }
+    };
+    // imageExtent = (1904,991) ||| minImageExtent = (1904,1006), maxImageExtent = (1904,1006)
     let (sharing_mode, queue_family_indices) = {
       let (graphics, present) = (device.graphics_queue_index, device.present_queue_index);
       if graphics == present {
@@ -142,6 +152,11 @@ impl Swapchain {
       SurfaceTransformFlagsKHR::IDENTITY
     } else {
       capabilities.current_transform
+    };
+    let composite_alpha = if capabilities.supported_composite_alpha.contains(CompositeAlphaFlagsKHR::OPAQUE) {
+      CompositeAlphaFlagsKHR::OPAQUE
+    } else {
+      return Err(NoCompositeAlphaModeFound())
     };
     let present_mode = {
       let available_present_modes = unsafe { surface.get_present_modes(device.physical_device) }
@@ -161,7 +176,7 @@ impl Swapchain {
       .image_sharing_mode(sharing_mode)
       .queue_family_indices(&queue_family_indices)
       .pre_transform(pre_transform)
-      .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+      .composite_alpha(composite_alpha)
       .present_mode(present_mode)
       .clipped(true)
       ;
@@ -169,7 +184,7 @@ impl Swapchain {
       create_info = create_info.old_swapchain(old_swapchain.wrapped);
     }
     let create_info = create_info.build();
-    trace!("Creating swapchain from {:?}", create_info);
+    debug!("Creating swapchain from {:?}", create_info);
     let swapchain = unsafe { loader.create_swapchain(&create_info, None) }
       .map_err(|e| SwapchainCreateFail(e))?;
 
@@ -228,7 +243,7 @@ impl Swapchain {
     surface: &Surface,
     surface_extent: Extent2D
   ) -> Result<(), SwapchainCreateError> {
-    trace!("Recreating swapchain");
+    debug!("Recreating swapchain");
     let mut new_swapchain = Self::new_internal(
       self.loader.clone(),
       device,
@@ -244,7 +259,7 @@ impl Swapchain {
 }
 
 #[derive(Error, Debug)]
-#[error("Failed to acquire next image from swapchain")]
+#[error("Failed to acquire next image from swapchain: {0:?}")]
 pub struct AcquireNextImageError(#[from] VkError);
 
 impl Swapchain {
@@ -254,12 +269,16 @@ impl Swapchain {
 }
 
 #[derive(Error, Debug)]
-#[error("Failed to acquire next image from swapchain")]
+#[error("Failed to present to queue: {0:?}")]
 pub struct QueuePresentError(#[from] VkError);
 
 impl Swapchain {
   pub unsafe fn queue_present(&self, queue: Queue, create_info: &vk::PresentInfoKHR) -> Result<bool, QueuePresentError> {
-    Ok(self.loader.queue_present(queue, create_info)?)
+    let result = self.loader.queue_present(queue, create_info);
+    match result {
+      Err(VkError::ERROR_OUT_OF_DATE_KHR) => Ok(true),
+      result => Ok(result?)
+    }
   }
 }
 

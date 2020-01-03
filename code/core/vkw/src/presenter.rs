@@ -1,6 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, Offset2D, Rect2D, Semaphore, Viewport};
-use log::trace;
+use log::debug;
 
 use crate::device::Device;
 use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain};
@@ -28,7 +28,7 @@ impl Presenter {
   }
 
   pub unsafe fn destroy(&mut self, device: &Device) {
-    trace!("Destroying presenter");
+    debug!("Destroying presenter");
     for image_state in self.swapchain_image_states.iter() {
       device.destroy_framebuffer(image_state.framebuffer);
     }
@@ -49,7 +49,7 @@ impl Presenter {
     device: &Device,
     framebuffers: I,
   ) -> Result<(), FramebufferCreateError> {
-    trace!("Recreating presenter");
+    debug!("Recreating presenter");
     for image_state in self.swapchain_image_states.iter() {
       unsafe { device.destroy_framebuffer(image_state.framebuffer) };
     }
@@ -78,7 +78,7 @@ impl Presenter {
     &self,
     swapchain: &Swapchain,
     image_acquired_semaphore: Option<Semaphore>,
-    surface_change_handler: &SurfaceChangeHandler,
+    surface_change_handler: &mut SurfaceChangeHandler,
   ) -> Result<&SwapchainImageState, AcquireNextImageError> {
     let (swapchain_image_index, suboptimal_swapchain) = unsafe { swapchain.acquire_next_image(Timeout::Infinite, image_acquired_semaphore, None)? };
     if suboptimal_swapchain {
@@ -93,7 +93,7 @@ impl Presenter {
     swapchain: &Swapchain,
     swapchain_image_state: &SwapchainImageState,
     wait_semaphores: &[Semaphore],
-    surface_change_handler: &SurfaceChangeHandler,
+    surface_change_handler: &mut SurfaceChangeHandler,
   ) -> Result<(), QueuePresentError> {
     let swapchains = &[swapchain.wrapped];
     let image_indices = &[swapchain_image_state.index];

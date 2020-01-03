@@ -1,6 +1,6 @@
 use ash::version::DeviceV1_0;
-use ash::vk::{self, Fence, Result as VkError, Semaphore};
-use log::trace;
+use ash::vk::{self, Fence, Queue, Result as VkError, Semaphore};
+use log::{trace, debug};
 use thiserror::Error;
 
 use crate::device::Device;
@@ -9,7 +9,7 @@ use crate::timeout::Timeout;
 // Fence creation and destruction
 
 #[derive(Error, Debug)]
-#[error("Failed to create fence")]
+#[error("Failed to create fence: {0:?}")]
 pub struct FenceCreateError(#[from] VkError);
 
 impl Device {
@@ -32,7 +32,7 @@ impl Device {
 // Fence wait
 
 #[derive(Error, Debug)]
-#[error("Failed to wait for fences")]
+#[error("Failed to wait for fences: {0:?}")]
 pub struct FenceWaitError(#[from] VkError);
 
 impl Device {
@@ -49,7 +49,7 @@ impl Device {
 // Fence reset
 
 #[derive(Error, Debug)]
-#[error("Failed to reset fences")]
+#[error("Failed to reset fences: {0:?}")]
 pub struct FenceResetError(#[from] VkError);
 
 impl Device {
@@ -66,7 +66,7 @@ impl Device {
 // Semaphore creation and destruction
 
 #[derive(Error, Debug)]
-#[error("Failed to create semaphore")]
+#[error("Failed to create semaphore: {0:?}")]
 pub struct SemaphoreCreateError(#[from] VkError);
 
 impl Device {
@@ -83,15 +83,26 @@ impl Device {
   }
 }
 
-// Device wait idle
+// Wait idle
 
 #[derive(Error, Debug)]
-#[error("Failed to wait for device idle")]
-pub struct WaitIdleError(#[from] VkError);
+#[error("Failed to wait for queue idle: {0:?}")]
+pub struct QueueWaitIdleError(#[from] VkError);
 
 impl Device {
-  pub unsafe fn wait_idle(&self) -> Result<(), WaitIdleError> {
-    trace!("Waiting for device {:?} idle", self.wrapped.handle());
+  pub unsafe fn queue_wait_idle(&self, queue: Queue) -> Result<(), QueueWaitIdleError> {
+    debug!("Waiting for queue {:?} idle", queue);
+    Ok(self.wrapped.queue_wait_idle(queue)?)
+  }
+}
+
+#[derive(Error, Debug)]
+#[error("Failed to wait for device idle: {0:?}")]
+pub struct DeviceWaitIdleError(#[from] VkError);
+
+impl Device {
+  pub unsafe fn device_wait_idle(&self) -> Result<(), DeviceWaitIdleError> {
+    debug!("Waiting for device {:?} idle", self.wrapped.handle());
     Ok(self.wrapped.device_wait_idle()?)
   }
 }
