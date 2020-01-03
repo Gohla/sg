@@ -228,6 +228,7 @@ impl Swapchain {
     surface: &Surface,
     surface_extent: Extent2D
   ) -> Result<(), SwapchainCreateError> {
+    trace!("Recreating swapchain");
     let mut new_swapchain = Self::new_internal(
       self.loader.clone(),
       device,

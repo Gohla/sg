@@ -31,6 +31,7 @@ impl Device {
   }
 
   pub unsafe fn destroy_command_pool(&self, command_pool: CommandPool) {
+    trace!("Destroying command pool {:?}", command_pool);
     self.wrapped.destroy_command_pool(command_pool, None)
   }
 }

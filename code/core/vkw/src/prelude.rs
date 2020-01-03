@@ -3,7 +3,7 @@ pub use ash::{
   extensions::ext::DebugReport as VkDebugReport,
   Instance as VkInstance,
   version::{EntryV1_0, InstanceV1_0},
-  vk::{Extent2D, PhysicalDeviceFeatures, PresentModeKHR},
+  vk::{CommandBuffer, CommandPool, Extent2D, Fence, Framebuffer, PhysicalDeviceFeatures, PresentModeKHR, RenderPass, Semaphore},
 };
 
 pub use crate::{
@@ -11,6 +11,9 @@ pub use crate::{
   entry::Entry,
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface},
   presenter::Presenter,
-  renderer::{Renderer, RenderState, CustomRenderState},
+  renderer::{CustomRenderState, Renderer, RenderState},
+  surface_change_handler::SurfaceChangeHandler,
+  timeout::Timeout,
+  version::VkVersion,
 };
 

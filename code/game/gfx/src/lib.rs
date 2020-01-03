@@ -1,11 +1,12 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
-use ash::vk::{self, CommandBuffer, RenderPass};
+use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
 use raw_window_handle::RawWindowHandle;
 
 use vkw::command_pool::AllocateCommandBuffersError;
+use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
 
 pub struct Gfx {
@@ -13,9 +14,11 @@ pub struct Gfx {
   pub debug_report: Option<DebugReport>,
   pub surface: Surface,
   pub device: Device,
+  pub swapchain: Swapchain,
   pub renderer: Renderer<GameRenderState>,
   pub render_pass: RenderPass,
   pub presenter: Presenter,
+  pub surface_change_handler: SurfaceChangeHandler,
 }
 
 pub struct GameRenderState {
@@ -131,32 +134,96 @@ impl Gfx {
       unsafe { device.create_render_pass(&create_info) }
         .with_context(|| "Failed to create Vulkan render pass")?
     };
+    let framebuffers = Self::create_framebuffers(&device, &swapchain, &render_pass)
+      .with_context(|| "Failed to create Vulkan framebuffer")?;
+    let presenter = Presenter::new(framebuffers)?;
 
-    let presenter = Presenter::new(&device, swapchain, &render_pass, &[])?;
+    let surface_change_handler = SurfaceChangeHandler::new();
 
     Ok(Self {
       instance,
       surface,
       debug_report,
       device,
+      swapchain,
       renderer,
       render_pass,
       presenter,
+      surface_change_handler,
     })
   }
 
-  pub fn update(&mut self) -> Result<()> {
-    if self.presenter.should_recreate() {
-      unsafe { self.device.wait_idle() }?;
-      self.presenter.recreate(&self.device, &self.surface, &self.render_pass, &[])?;
+  pub fn render_frame(&mut self) -> Result<()> {
+    // Recreate surface-extent dependent items if needed.
+    if let Some(extent) = self.surface_change_handler.query_surface_change(self.swapchain.extent) {
+      unsafe {
+        self.swapchain.recreate(&self.device, &self.surface, extent)
+          .with_context(|| "Failed to recreate VKW swapchain")?;
+        let framebuffers = Self::create_framebuffers(&self.device, &self.swapchain, &self.render_pass)
+          .with_context(|| "Failed to recreate Vulkan framebuffer")?;
+        self.presenter.recreate(&self.device, framebuffers)
+          .with_context(|| "Failed to recreate VKW presenter")?;
+      }
     }
+    let extent = self.swapchain.extent;
+
+    // Acquire render state.
+    let (render_state, game_render_state) = self.renderer.next_render_state(&self.device)
+      .with_context(|| "Failed to acquire render state")?;
+    let command_buffer = game_render_state.command_buffer;
+
+    // Acquire swapchain image.
+    let swapchain_image_state = self.presenter.acquire_image_state(&self.swapchain, Some(render_state.image_acquired_semaphore), &self.surface_change_handler)
+      .with_context(|| "Failed to acquire swapchain image state")?;
+
+    unsafe {
+      // Record primary command buffer.
+      self.device.begin_command_buffer(command_buffer, true)
+        .with_context(|| "Failed to begin command buffer")?;
+      self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
+      self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
+
+      // Done recording primary command buffer.
+      self.device.end_render_pass(command_buffer);
+      self.device.end_command_buffer(command_buffer)
+        .with_context(|| "Failed to end command buffer")?;
+
+      // Submit command buffer: render to swapchain image.
+      self.device.submit_command_buffer(
+        command_buffer,
+        &[render_state.image_acquired_semaphore],
+        &[PipelineStageFlags::TOP_OF_PIPE],
+        &[render_state.render_complete_semaphore],
+        render_state.render_complete_fence
+      ).with_context(|| "Failed to submit command buffer")?;
+    }
+
+    // Present: take rendered swapchain image and present to the user.
+    self.presenter.present(&self.device, &self.swapchain, swapchain_image_state, &[render_state.render_complete_semaphore], &self.surface_change_handler)
+      .with_context(|| "Failed to present")?;
 
     Ok(())
   }
 
   pub fn surface_size_changed<S: Into<(u32, u32)>>(&mut self, surface_size: S) {
     let (width, height) = surface_size.into();
-    self.presenter.signal_surface_resize(Extent2D { width, height });
+    self.surface_change_handler.signal_surface_resize(Extent2D { width, height });
+  }
+
+
+  fn create_framebuffers(device: &Device, swapchain: &Swapchain, render_pass: &RenderPass) -> Result<Vec<Framebuffer>, FramebufferCreateError> {
+    swapchain.image_views.iter().map(|v| {
+      let attachments = vec![*v];
+      let create_info = vk::FramebufferCreateInfo::builder()
+        .render_pass(*render_pass)
+        .attachments(&attachments)
+        .width(swapchain.extent.width)
+        .height(swapchain.extent.height)
+        .layers(1)
+        .build()
+        ;
+      Ok(device.create_framebuffer(&create_info)?)
+    }).collect()
   }
 }
 
@@ -166,6 +233,7 @@ impl Drop for Gfx {
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
       self.renderer.destroy(&self.device);
+      self.swapchain.destroy(&self.device);
       self.device.destroy();
       self.surface.destroy();
       if let Some(debug_report) = &mut self.debug_report {

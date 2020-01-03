@@ -36,13 +36,13 @@ impl Device {
 pub struct FenceWaitError(#[from] VkError);
 
 impl Device {
-  pub unsafe fn wait_for_fence(&self, fence: Fence, timeout: Timeout) -> Result<(), FenceWaitError> {
-    self.wait_for_fences(&[fence], true, timeout)
-  }
-
   pub unsafe fn wait_for_fences(&self, fences: &[Fence], wait_all: bool, timeout: Timeout) -> Result<(), FenceWaitError> {
     trace!("Waiting for {} fences {:?}", if wait_all { "all" } else { "one of" }, fences);
     Ok(self.wrapped.wait_for_fences(fences, wait_all, timeout.into())?)
+  }
+
+  pub unsafe fn wait_for_fence(&self, fence: Fence, timeout: Timeout) -> Result<(), FenceWaitError> {
+    self.wait_for_fences(&[fence], true, timeout)
   }
 }
 
@@ -53,13 +53,13 @@ impl Device {
 pub struct FenceResetError(#[from] VkError);
 
 impl Device {
-  pub unsafe fn reset_fence(&self, fence: Fence) -> Result<(), FenceResetError> {
-    self.reset_fences(&[fence])
-  }
-
   pub unsafe fn reset_fences(&self, fences: &[Fence]) -> Result<(), FenceResetError> {
     trace!("Resetting fences {:?}", fences);
     Ok(self.wrapped.reset_fences(fences)?)
+  }
+
+  pub unsafe fn reset_fence(&self, fence: Fence) -> Result<(), FenceResetError> {
+    self.reset_fences(&[fence])
   }
 }
 
