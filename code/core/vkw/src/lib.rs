@@ -11,6 +11,8 @@ pub mod command_buffer;
 pub mod sync;
 pub mod render_pass;
 pub mod framebuffer;
+pub mod shader;
+pub mod graphics_pipeline;
 pub mod renderer;
 pub mod presenter;
 pub mod surface_change_handler;

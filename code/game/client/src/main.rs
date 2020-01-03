@@ -13,6 +13,8 @@ use winit::platform::desktop::EventLoopExtDesktop;
 
 use gfx::Gfx;
 
+pub mod timing;
+
 fn main() -> Result<()> {
   simple_logger::init_with_level(log::Level::Debug)
     .with_context(|| "Failed to initialize logger")?;
@@ -50,7 +52,7 @@ fn main() -> Result<()> {
           WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
           _ => *control_flow = ControlFlow::Wait,
         }
-        tx.send(event).unwrap();
+        tx.send(event).ok(); // Ignore failure: receiver was destroyed already, but that means we are closing.
       }
       _ => *control_flow = ControlFlow::Wait,
     }

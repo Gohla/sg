@@ -3,7 +3,11 @@ pub use ash::{
   extensions::ext::DebugReport as VkDebugReport,
   Instance as VkInstance,
   version::{EntryV1_0, InstanceV1_0},
-  vk::{CommandBuffer, CommandPool, Extent2D, Fence, Framebuffer, PhysicalDeviceFeatures, PresentModeKHR, RenderPass, Semaphore},
+  vk::{
+    BlendFactor, BlendOp, ColorComponentFlags, CommandBuffer, CommandPool, CullModeFlags, DynamicState, Extent2D, Fence,
+    Framebuffer, FrontFace, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout,
+    PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
+  },
 };
 
 pub use crate::{
@@ -12,6 +16,7 @@ pub use crate::{
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface},
   presenter::Presenter,
   renderer::{CustomRenderState, Renderer, RenderState},
+  shader::ShaderModuleEx,
   surface_change_handler::SurfaceChangeHandler,
   timeout::Timeout,
   version::VkVersion,

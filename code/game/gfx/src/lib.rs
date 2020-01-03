@@ -3,11 +3,16 @@ use std::num::NonZeroU32;
 use anyhow::{Context, Result};
 use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
+use log::debug;
 use raw_window_handle::RawWindowHandle;
 
 use vkw::command_pool::AllocateCommandBuffersError;
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
+
+use crate::triangle_renderer::TriangleRenderer;
+
+pub mod triangle_renderer;
 
 pub struct Gfx {
   pub instance: Instance,
@@ -15,10 +20,13 @@ pub struct Gfx {
   pub surface: Surface,
   pub device: Device,
   pub swapchain: Swapchain,
+  pub pipeline_cache: PipelineCache,
   pub renderer: Renderer<GameRenderState>,
   pub render_pass: RenderPass,
   pub presenter: Presenter,
   pub surface_change_handler: SurfaceChangeHandler,
+
+  pub triangle_renderer: TriangleRenderer,
 }
 
 pub struct GameRenderState {
@@ -60,7 +68,7 @@ impl Gfx {
       ).with_context(|| "Failed to create VKW instance")?;
       instance
     };
-    dbg!(&instance.features);
+    debug!("{:#?}", &instance.features);
 
     let debug_report = if require_validation_layer {
       Some(DebugReport::new(&instance, DebugReportFlagsEXT::all() - DebugReportFlagsEXT::INFORMATION).with_context(|| "Failed to create VKW debug report")?)
@@ -79,6 +87,7 @@ impl Gfx {
       Device::new(&instance, features_query, Some(&surface))
         .with_context(|| "Failed to create VKW device")?
     };
+    debug!("{:#?}", &device.features);
 
     let swapchain = {
       let features_query = {
@@ -96,6 +105,10 @@ impl Gfx {
       Swapchain::new(&instance, &device, &surface, features_query, Extent2D { width, height })
         .with_context(|| "Failed to create VKW swapchain")?
     };
+    debug!("{:#?}", &swapchain.features);
+
+    let pipeline_cache = unsafe { device.create_pipeline_cache() }
+      .with_context(|| "Failed to create Vulkan pipeline cache")?;
 
     let renderer = Renderer::new::<AllocateCommandBuffersError, _>(&device, max_frames_in_flight, |state| {
       Ok(GameRenderState {
@@ -104,7 +117,7 @@ impl Gfx {
     })?;
 
     let render_pass = {
-      use vk::{AttachmentDescription, SampleCountFlags, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, PipelineBindPoint, AttachmentReference, ImageLayout};
+      use vk::{AttachmentDescription, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, AttachmentReference, ImageLayout};
       let attachments = vec![
         AttachmentDescription::builder()
           .format(swapchain.features.surface_format.format)
@@ -142,16 +155,21 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
+    let triangle_renderer = TriangleRenderer::new(&device, render_pass, pipeline_cache)
+      .with_context(|| "Failed to create triangle renderer")?;
+
     Ok(Self {
       instance,
       surface,
       debug_report,
       device,
       swapchain,
+      pipeline_cache,
       renderer,
       render_pass,
       presenter,
       surface_change_handler,
+      triangle_renderer,
     })
   }
 
@@ -186,6 +204,8 @@ impl Gfx {
         .with_context(|| "Failed to begin command buffer")?;
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
+
+      self.triangle_renderer.render(&self.device, command_buffer);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);
@@ -238,9 +258,11 @@ impl Gfx {
 impl Drop for Gfx {
   fn drop(&mut self) {
     unsafe {
+      self.triangle_renderer.destroy(&self.device);
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
       self.renderer.destroy(&self.device);
+      self.device.destroy_pipeline_cache(self.pipeline_cache);
       self.swapchain.destroy(&self.device);
       self.device.destroy();
       self.surface.destroy();
