@@ -13,7 +13,8 @@ pub struct TriangleRenderer {
   frag_shader: ShaderModule,
   pipeline_layout: PipelineLayout,
   pipeline: Pipeline,
-  buffer_allocation: BufferAllocation,
+  vertex_buffer: BufferAllocation,
+  index_buffer: BufferAllocation,
 }
 
 impl TriangleRenderer {
@@ -101,35 +102,51 @@ impl TriangleRenderer {
 
       let vertex_data = VertexData::triangle_vertex_data();
       let vertex_data_size = size_of::<VertexData>() * vertex_data.len();
+      let index_data = VertexData::triangle_index_data();
+      let index_data_size = size_of::<u16>() * index_data.len();
 
-      let staging_buffer_allocation = allocator.create_staging_buffer(vertex_data_size)?;
-      staging_buffer_allocation.map(allocator)?.copy_from_slice(&vertex_data);
-      let buffer_allocation = allocator.create_static_vertex_buffer(vertex_data_size)?;
+      let vertex_staging = allocator.create_staging_buffer(vertex_data_size)?;
+      vertex_staging.map(allocator)?.copy_from_slice(&vertex_data);
+      let index_staging = allocator.create_staging_buffer(index_data_size)?;
+      index_staging.map(allocator)?.copy_from_slice(&index_data);
+
+      let vertex_buffer = allocator.create_static_vertex_buffer(vertex_data_size)?;
+      let index_buffer = allocator.create_static_index_buffer(vertex_data_size)?;
+
       device.allocate_record_submit_wait::<_, !, _>(transient_command_pool, |command_buffer| {
-        device.cmd_copy_buffer(command_buffer, staging_buffer_allocation.buffer, buffer_allocation.buffer, &[
+        device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, vertex_buffer.buffer, &[
           BufferCopy::builder()
             .size(vertex_data_size as u64)
             .build()
         ]);
+        device.cmd_copy_buffer(command_buffer, index_staging.buffer, index_buffer.buffer, &[
+          BufferCopy::builder()
+            .size(index_data_size as u64)
+            .build()
+        ]);
         Ok(())
       })?;
-      staging_buffer_allocation.destroy(allocator);
 
-      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer_allocation })
+      index_staging.destroy(allocator);
+      vertex_staging.destroy(allocator);
+
+      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, vertex_buffer, index_buffer })
     }
   }
 
   pub fn render(&self, device: &Device, command_buffer: CommandBuffer) {
     unsafe {
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
-      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.buffer_allocation.buffer], &[0]);
-      device.cmd_draw(command_buffer, 3, 1, 0, 0);
+      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
+      device.cmd_bind_index_buffer(command_buffer, self.index_buffer.buffer, 0, IndexType::UINT16);
+      device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
     }
   }
 
   pub fn destroy(&mut self, device: &Device, allocator: &Allocator) {
     unsafe {
-      self.buffer_allocation.destroy(allocator);
+      self.vertex_buffer.destroy(allocator);
+      self.index_buffer.destroy(allocator);
       device.destroy_pipeline(self.pipeline);
       device.destroy_pipeline_layout(self.pipeline_layout);
       device.destroy_shader_module(self.vert_shader);
@@ -174,9 +191,14 @@ impl VertexData {
 
   pub fn triangle_vertex_data() -> Vec<VertexData> {
     vec![
-      VertexData { pos: Vec2 { x: -0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 0.0, z: 1.0 } },
-      VertexData { pos: Vec2 { x: 0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 1.0, z: 0.0 } },
-      VertexData { pos: Vec2 { x: 0.0, y: -0.5 }, col: Vec3 { x: 1.0, y: 0.0, z: 0.0 } },
+      VertexData { pos: Vec2 { x: 0.5, y: -0.5 }, col: Vec3 { x: 1.0, y: 0.0, z: 0.0 } },
+      VertexData { pos: Vec2 { x: -0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 1.0, z: 0.0 } },
+      VertexData { pos: Vec2 { x: 0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 0.0, z: 1.0 } },
+      VertexData { pos: Vec2 { x: -0.5, y: -0.5 }, col: Vec3 { x: 1.0, y: 1.0, z: 1.0 } },
     ]
+  }
+
+  pub fn triangle_index_data() -> Vec<u16> {
+    vec![0, 1, 2, 0, 3, 1]
   }
 }

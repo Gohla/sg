@@ -6,9 +6,9 @@ pub use ash::{
   vk::{
     BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, ColorComponentFlags, CommandBuffer, CommandPool,
     CullModeFlags, DeviceSize, DynamicState, Extent2D, Fence, Format, Framebuffer, FrontFace,
-    LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout, PolygonMode,
-    PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule, VertexInputAttributeDescription,
-    VertexInputBindingDescription, VertexInputRate
+    IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout,
+    PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
+    VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
   },
 };
 pub use vk_mem::{AllocationCreateInfo, AllocationInfo, MemoryUsage};
