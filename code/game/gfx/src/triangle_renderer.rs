@@ -1,9 +1,8 @@
-use std::intrinsics::copy_nonoverlapping;
 use std::mem::size_of;
 
 use anyhow::Result;
 use ash::version::DeviceV1_0;
-use ash::vk::{self, BufferCreateInfo, Rect2D};
+use ash::vk::{self, Rect2D};
 use ultraviolet::{Vec2, Vec3};
 
 use vkw::prelude::*;
@@ -14,16 +13,16 @@ pub struct TriangleRenderer {
   frag_shader: ShaderModule,
   pipeline_layout: PipelineLayout,
   pipeline: Pipeline,
-  buffer: Buffer,
-  allocation: Allocation,
+  buffer_allocation: BufferAllocation,
 }
 
 impl TriangleRenderer {
   pub fn new(
     device: &Device,
     allocator: &Allocator,
+    _transient_command_pool: CommandPool,
     render_pass: RenderPass,
-    pipeline_cache: PipelineCache
+    pipeline_cache: PipelineCache,
   ) -> Result<Self> {
     unsafe {
       let pipeline_layout = device.create_pipeline_layout(&[], &[])?;
@@ -101,31 +100,24 @@ impl TriangleRenderer {
       };
 
       let vertex_data = VertexData::triangle_vertex_data();
-      let (buffer, allocation, _) = allocator.create_buffer(
-        &BufferCreateInfo::builder().size((size_of::<VertexData>() * vertex_data.len()) as u64).usage(BufferUsageFlags::VERTEX_BUFFER),
-        &AllocationCreateInfo { usage: MemoryUsage::CpuOnly, ..AllocationCreateInfo::default() }
-      )?;
-      {
-        let mapped = allocator.map_memory(&allocation)?;
-        copy_nonoverlapping(vertex_data.as_ptr(), mapped as *mut VertexData, vertex_data.len());
-      }
-      allocator.unmap_memory(&allocation)?;
+      let buffer_allocation = allocator.allocate_device_dynamic_vertex_buffer(size_of::<VertexData>() * vertex_data.len())?;
+      buffer_allocation.map(allocator)?.copy_from_slice(&vertex_data);
 
-      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer, allocation })
+      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer_allocation })
     }
   }
 
   pub fn render(&self, device: &Device, command_buffer: CommandBuffer) {
     unsafe {
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
-      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.buffer], &[0]);
+      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.buffer_allocation.buffer], &[0]);
       device.cmd_draw(command_buffer, 3, 1, 0, 0);
     }
   }
 
   pub fn destroy(&mut self, device: &Device, allocator: &Allocator) {
     unsafe {
-      allocator.destroy_buffer(self.buffer, &self.allocation).unwrap(); // Safe to unwrap, it cannot fail.
+      self.buffer_allocation.destroy(allocator);
       device.destroy_pipeline(self.pipeline);
       device.destroy_pipeline_layout(self.pipeline_layout);
       device.destroy_shader_module(self.vert_shader);

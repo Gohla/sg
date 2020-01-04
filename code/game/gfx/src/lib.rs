@@ -20,6 +20,7 @@ pub struct Gfx {
   pub surface: Surface,
   pub device: Device,
   pub allocator: Allocator,
+  pub transient_command_pool: CommandPool,
   pub swapchain: Swapchain,
   pub pipeline_cache: PipelineCache,
   pub renderer: Renderer<GameRenderState>,
@@ -93,6 +94,9 @@ impl Gfx {
     let allocator = unsafe { device.create_allocator(&instance) }
       .with_context(|| "Failed to create vk-mem allocator")?;
 
+    let transient_command_pool = unsafe { device.create_command_pool(true, false) }
+      .with_context(|| "Failed to create transient command pool")?;
+
     let swapchain = {
       let features_query = {
         let mut query = SwapchainFeaturesQuery::new();
@@ -160,7 +164,7 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
-    let triangle_renderer = TriangleRenderer::new(&device, &allocator, render_pass, pipeline_cache)
+    let triangle_renderer = TriangleRenderer::new(&device, &allocator, transient_command_pool, render_pass, pipeline_cache)
       .with_context(|| "Failed to create triangle renderer")?;
 
     Ok(Self {
@@ -169,6 +173,7 @@ impl Gfx {
       debug_report,
       device,
       allocator,
+      transient_command_pool,
       swapchain,
       pipeline_cache,
       renderer,
@@ -267,6 +272,7 @@ impl Drop for Gfx {
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
       self.renderer.destroy(&self.device);
+      self.device.destroy_command_pool(self.transient_command_pool);
       self.allocator.destroy();
       self.device.destroy_pipeline_cache(self.pipeline_cache);
       self.swapchain.destroy(&self.device);
