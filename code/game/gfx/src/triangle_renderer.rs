@@ -15,8 +15,8 @@ pub struct TriangleRenderer {
 impl TriangleRenderer {
   pub fn new(device: &Device, render_pass: RenderPass, pipeline_cache: PipelineCache) -> Result<Self> {
     unsafe {
-      let vert_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.vert.spirv"))?;
-      let frag_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.frag.spirv"))?;
+      let vert_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.vert.spv"))?;
+      let frag_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.frag.spv"))?;
 
       let pipeline_layout = device.create_pipeline_layout(&[], &[])?;
       let pipeline = {
