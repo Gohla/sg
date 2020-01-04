@@ -1,6 +1,10 @@
+use std::intrinsics::copy_nonoverlapping;
+use std::mem::size_of;
+
 use anyhow::Result;
 use ash::version::DeviceV1_0;
-use ash::vk::{self, Rect2D};
+use ash::vk::{self, BufferCreateInfo, Rect2D};
+use ultraviolet::{Vec2, Vec3};
 
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
@@ -10,21 +14,35 @@ pub struct TriangleRenderer {
   frag_shader: ShaderModule,
   pipeline_layout: PipelineLayout,
   pipeline: Pipeline,
+  buffer: Buffer,
+  allocation: Allocation,
 }
 
 impl TriangleRenderer {
-  pub fn new(device: &Device, render_pass: RenderPass, pipeline_cache: PipelineCache) -> Result<Self> {
+  pub fn new(
+    device: &Device,
+    allocator: &Allocator,
+    render_pass: RenderPass,
+    pipeline_cache: PipelineCache
+  ) -> Result<Self> {
     unsafe {
+      let pipeline_layout = device.create_pipeline_layout(&[], &[])?;
+
       let vert_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.vert.spv"))?;
       let frag_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.frag.spv"))?;
 
-      let pipeline_layout = device.create_pipeline_layout(&[], &[])?;
+      let vertex_bindings = VertexData::bindings();
+      let vertex_attributes = VertexData::attributes();
+
       let pipeline = {
         let stages = &[
           vert_shader.create_vertex_shader_stage(None),
           frag_shader.create_fragment_shader_stage(None),
         ];
-        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder();
+        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+          .vertex_binding_descriptions(&vertex_bindings)
+          .vertex_attribute_descriptions(&vertex_attributes)
+          ;
         let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
           .topology(PrimitiveTopology::TRIANGLE_LIST)
           .primitive_restart_enable(false)
@@ -82,23 +100,79 @@ impl TriangleRenderer {
         device.create_graphics_pipeline(pipeline_cache, &create_info)?
       };
 
-      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline })
+      let vertex_data = VertexData::triangle_vertex_data();
+      let (buffer, allocation, _) = allocator.create_buffer(
+        &BufferCreateInfo::builder().size((size_of::<VertexData>() * vertex_data.len()) as u64).usage(BufferUsageFlags::VERTEX_BUFFER),
+        &AllocationCreateInfo { usage: MemoryUsage::CpuOnly, ..AllocationCreateInfo::default() }
+      )?;
+      {
+        let mapped = allocator.map_memory(&allocation)?;
+        copy_nonoverlapping(vertex_data.as_ptr(), mapped as *mut VertexData, vertex_data.len());
+      }
+      allocator.unmap_memory(&allocation)?;
+
+      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer, allocation })
     }
   }
 
   pub fn render(&self, device: &Device, command_buffer: CommandBuffer) {
     unsafe {
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
+      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.buffer], &[0]);
       device.cmd_draw(command_buffer, 3, 1, 0, 0);
     }
   }
 
-  pub fn destroy(&mut self, device: &Device) {
+  pub fn destroy(&mut self, device: &Device, allocator: &Allocator) {
     unsafe {
+      allocator.destroy_buffer(self.buffer, &self.allocation).unwrap(); // Safe to unwrap, it cannot fail.
       device.destroy_pipeline(self.pipeline);
       device.destroy_pipeline_layout(self.pipeline_layout);
       device.destroy_shader_module(self.vert_shader);
       device.destroy_shader_module(self.frag_shader);
     }
+  }
+}
+
+#[allow(dead_code)]
+struct VertexData {
+  pos: Vec2,
+  col: Vec3,
+}
+
+impl VertexData {
+  pub fn bindings() -> Vec<VertexInputBindingDescription> {
+    vec![
+      VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(size_of::<VertexData>() as u32)
+        .input_rate(VertexInputRate::VERTEX)
+        .build(),
+    ]
+  }
+
+  pub fn attributes() -> Vec<VertexInputAttributeDescription> {
+    vec![
+      VertexInputAttributeDescription::builder()
+        .location(0)
+        .binding(0)
+        .format(Format::R32G32_SFLOAT)
+        .offset(0)
+        .build(),
+      VertexInputAttributeDescription::builder()
+        .location(1)
+        .binding(0)
+        .format(Format::R32G32B32_SFLOAT)
+        .offset(size_of::<Vec2>() as u32)
+        .build()
+    ]
+  }
+
+  pub fn triangle_vertex_data() -> Vec<VertexData> {
+    vec![
+      VertexData { pos: Vec2 { x: -0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 0.0, z: 1.0 } },
+      VertexData { pos: Vec2 { x: 0.5, y: 0.5 }, col: Vec3 { x: 0.0, y: 1.0, z: 0.0 } },
+      VertexData { pos: Vec2 { x: 0.0, y: -0.5 }, col: Vec3 { x: 1.0, y: 0.0, z: 0.0 } },
+    ]
   }
 }

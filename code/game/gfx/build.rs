@@ -45,6 +45,7 @@ impl CompilerEx for Compiler {
     let mut writer = OpenOptions::new()
       .write(true)
       .create(true)
+      .truncate(true)
       .open(dst_path)
       .unwrap_or_else(|e| panic!("Failed to create a writer for destination file '{}': {:?}", dst_path.display(), e));
     writer.write(result.as_binary_u8())

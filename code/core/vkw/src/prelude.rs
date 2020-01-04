@@ -4,12 +4,13 @@ pub use ash::{
   Instance as VkInstance,
   version::{EntryV1_0, InstanceV1_0},
   vk::{
-    BlendFactor, BlendOp, ColorComponentFlags, CommandBuffer, CommandPool, CullModeFlags, DynamicState, Extent2D, Fence,
-    Framebuffer, FrontFace, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout,
-    PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
+    BlendFactor, BlendOp, Buffer, BufferUsageFlags, ColorComponentFlags, CommandBuffer, CommandPool, CullModeFlags, DynamicState,
+    Extent2D, Fence, Format, Framebuffer, FrontFace, LogicOp, PhysicalDeviceFeatures, Pipeline,
+    PipelineBindPoint, PipelineCache, PipelineLayout, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass,
+    SampleCountFlags, Semaphore, ShaderModule, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate
   },
 };
-pub use vk_mem::Allocator;
+pub use vk_mem::{Allocation, AllocationCreateInfo, AllocationInfo, Allocator, MemoryUsage};
 
 pub use crate::{
   device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},

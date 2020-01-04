@@ -160,7 +160,7 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
-    let triangle_renderer = TriangleRenderer::new(&device, render_pass, pipeline_cache)
+    let triangle_renderer = TriangleRenderer::new(&device, &allocator, render_pass, pipeline_cache)
       .with_context(|| "Failed to create triangle renderer")?;
 
     Ok(Self {
@@ -263,10 +263,11 @@ impl Gfx {
 impl Drop for Gfx {
   fn drop(&mut self) {
     unsafe {
-      self.triangle_renderer.destroy(&self.device);
+      self.triangle_renderer.destroy(&self.device, &self.allocator);
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
       self.renderer.destroy(&self.device);
+      self.allocator.destroy();
       self.device.destroy_pipeline_cache(self.pipeline_cache);
       self.swapchain.destroy(&self.device);
       self.device.destroy();
