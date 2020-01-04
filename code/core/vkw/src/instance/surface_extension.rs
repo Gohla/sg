@@ -15,7 +15,7 @@ use std::ops::Deref;
 use ash::extensions::khr::Surface as SurfaceLoader;
 use ash::vk::{self, Result as VkError, SurfaceKHR};
 use byte_strings::c_str;
-use log::trace;
+use log::debug;
 use raw_window_handle::RawWindowHandle;
 use thiserror::Error;
 
@@ -41,31 +41,29 @@ pub enum SurfaceCreateError {
 impl Surface {
   pub fn new(instance: &Instance, window: RawWindowHandle) -> Result<Self, SurfaceCreateError> {
     let loader = SurfaceLoader::new(&instance.entry.wrapped, &instance.wrapped);
+    debug!("Created surface loader");
     let surface = Self::create_surface(instance, window)?;
+    debug!("Created surface {:?}", surface);
     Ok(Self { loader, wrapped: surface })
   }
 
   pub unsafe fn destroy(&mut self) {
-    trace!("Destroying surface {:?}", self.wrapped);
+    debug!("Destroying surface {:?}", self.wrapped);
     self.loader.destroy_surface(self.wrapped, None);
   }
 
   fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
     use SurfaceCreateError::*;
-    use std::ptr;
     use std::os::raw::c_void;
 
     #[cfg(target_os = "windows")] {
       use ash::extensions::khr::Win32Surface;
 
       if let RawWindowHandle::Windows(handle) = window {
-        let create_info = vk::Win32SurfaceCreateInfoKHR {
-          s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
-          p_next: ptr::null(),
-          flags: Default::default(),
-          hinstance: handle.hinstance,
-          hwnd: handle.hwnd as *const c_void,
-        };
+        let create_info = vk::Win32SurfaceCreateInfoKHR::builder()
+          .hinstance(handle.hinstance)
+          .hwnd(handle.hwnd as *const c_void)
+          ;
         let loader = Win32Surface::new(&instance.entry.wrapped, &instance.wrapped);
         let surface = unsafe { loader.create_win32_surface(&create_info, None) }
           .map_err(|e| SurfaceCreateFail(e))?;

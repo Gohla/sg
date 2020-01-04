@@ -9,6 +9,7 @@ pub use ash::{
     PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
   },
 };
+pub use vk_mem::Allocator;
 
 pub use crate::{
   device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},

@@ -1,7 +1,7 @@
 use ash::version::DeviceV1_0;
 use ash::vk::{Framebuffer, FramebufferCreateInfo, Result as VkError};
-use thiserror::Error;
 use log::debug;
+use thiserror::Error;
 
 use crate::device::Device;
 
@@ -12,9 +12,10 @@ use crate::device::Device;
 pub struct FramebufferCreateError(#[from] VkError);
 
 impl Device {
-  pub fn create_framebuffer(&self, create_info: &FramebufferCreateInfo) -> Result<Framebuffer, FramebufferCreateError> {
-    debug!("Creating framebuffer from {:?}", create_info);
-    Ok(unsafe { self.wrapped.create_framebuffer(create_info, None) }?)
+  pub unsafe fn create_framebuffer(&self, create_info: &FramebufferCreateInfo) -> Result<Framebuffer, FramebufferCreateError> {
+    let framebuffer = self.wrapped.create_framebuffer(create_info, None)?;
+    debug!("Created framebuffer {:?}", framebuffer);
+    Ok(framebuffer)
   }
 
   pub unsafe fn destroy_framebuffer(&self, framebuffer: Framebuffer) {

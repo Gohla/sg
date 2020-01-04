@@ -1,6 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::vk::{self, Fence, Queue, Result as VkError, Semaphore};
-use log::{trace, debug};
+use log::{debug, trace};
 use thiserror::Error;
 
 use crate::device::Device;
@@ -18,9 +18,10 @@ impl Device {
     let flags = if signaled { FenceCreateFlags::SIGNALED } else { FenceCreateFlags::empty() };
     let create_info = FenceCreateInfo::builder()
       .flags(flags)
-      .build();
-    trace!("Creating fence from {:?}", create_info);
-    Ok(self.wrapped.create_fence(&create_info, None)?)
+      ;
+    let fence = self.wrapped.create_fence(&create_info, None)?;
+    trace!("Created fence {:?}", fence);
+    Ok(fence)
   }
 
   pub unsafe fn destroy_fence(&self, fence: Fence) {
@@ -71,10 +72,10 @@ pub struct SemaphoreCreateError(#[from] VkError);
 
 impl Device {
   pub unsafe fn create_semaphore(&self) -> Result<Semaphore, SemaphoreCreateError> {
-    use vk::SemaphoreCreateInfo;
-    let create_info = SemaphoreCreateInfo::builder().build();
-    trace!("Creating semaphore from {:?}", create_info);
-    Ok(self.wrapped.create_semaphore(&create_info, None)?)
+    let create_info = vk::SemaphoreCreateInfo::builder();
+    let semaphore = self.wrapped.create_semaphore(&create_info, None)?;
+    trace!("Created semaphore {:?}", semaphore);
+    Ok(semaphore)
   }
 
   pub unsafe fn destroy_semaphore(&self, semaphore: Semaphore) {

@@ -19,6 +19,7 @@ pub struct Gfx {
   pub debug_report: Option<DebugReport>,
   pub surface: Surface,
   pub device: Device,
+  pub allocator: Allocator,
   pub swapchain: Swapchain,
   pub pipeline_cache: PipelineCache,
   pub renderer: Renderer<GameRenderState>,
@@ -89,6 +90,9 @@ impl Gfx {
     };
     debug!("{:#?}", &device.features);
 
+    let allocator = unsafe { device.create_allocator(&instance) }
+      .with_context(|| "Failed to create vk-mem allocator")?;
+
     let swapchain = {
       let features_query = {
         let mut query = SwapchainFeaturesQuery::new();
@@ -118,7 +122,7 @@ impl Gfx {
 
     let render_pass = {
       use vk::{AttachmentDescription, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, AttachmentReference, ImageLayout};
-      let attachments = vec![
+      let attachments = &[
         AttachmentDescription::builder()
           .format(swapchain.features.surface_format.format)
           .samples(SampleCountFlags::TYPE_1)
@@ -130,26 +134,27 @@ impl Gfx {
           .final_layout(ImageLayout::PRESENT_SRC_KHR)
           .build(),
       ];
-      let color_attachments = vec![
+      let color_attachments = &[
         AttachmentReference::builder()
           .attachment(0)
           .layout(ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-          .build()
+          .build(),
       ];
-      let subpasses = vec![
+      let subpasses = &[
         SubpassDescription::builder()
           .pipeline_bind_point(PipelineBindPoint::GRAPHICS)
-          .color_attachments(&color_attachments)
-          .build()
+          .color_attachments(color_attachments)
+          .build(),
       ];
       let create_info = vk::RenderPassCreateInfo::builder()
-        .attachments(&attachments)
-        .subpasses(&subpasses)
+        .attachments(attachments)
+        .subpasses(subpasses)
         ;
+      // CORRECTNESS: slices are taken by pointer but are alive until `create_render_pass` is called.
       unsafe { device.create_render_pass(&create_info) }
         .with_context(|| "Failed to create Vulkan render pass")?
     };
-    let framebuffers = Self::create_framebuffers(&device, &swapchain, &render_pass)
+    let framebuffers = Self::create_framebuffers(&device, &swapchain, render_pass)
       .with_context(|| "Failed to create Vulkan framebuffer")?;
     let presenter = Presenter::new(framebuffers)?;
 
@@ -163,6 +168,7 @@ impl Gfx {
       surface,
       debug_report,
       device,
+      allocator,
       swapchain,
       pipeline_cache,
       renderer,
@@ -181,7 +187,7 @@ impl Gfx {
           .with_context(|| "Failed to wait for device idle before recreating surface-extent dependent items")?;
         self.swapchain.recreate(&self.device, &self.surface, extent)
           .with_context(|| "Failed to recreate VKW swapchain")?;
-        let framebuffers = Self::create_framebuffers(&self.device, &self.swapchain, &self.render_pass)
+        let framebuffers = Self::create_framebuffers(&self.device, &self.swapchain, self.render_pass)
           .with_context(|| "Failed to recreate Vulkan framebuffer")?;
         self.presenter.recreate(&self.device, framebuffers)
           .with_context(|| "Failed to recreate VKW presenter")?;
@@ -239,18 +245,17 @@ impl Gfx {
   }
 
 
-  fn create_framebuffers(device: &Device, swapchain: &Swapchain, render_pass: &RenderPass) -> Result<Vec<Framebuffer>, FramebufferCreateError> {
+  fn create_framebuffers(device: &Device, swapchain: &Swapchain, render_pass: RenderPass) -> Result<Vec<Framebuffer>, FramebufferCreateError> {
     swapchain.image_views.iter().map(|v| {
-      let attachments = vec![*v];
+      let attachments = &[*v];
       let create_info = vk::FramebufferCreateInfo::builder()
-        .render_pass(*render_pass)
-        .attachments(&attachments)
+        .render_pass(render_pass)
+        .attachments(attachments)
         .width(swapchain.extent.width)
         .height(swapchain.extent.height)
         .layers(1)
-        .build()
         ;
-      Ok(device.create_framebuffer(&create_info)?)
+      Ok(unsafe { device.create_framebuffer(&create_info) }?)
     }).collect()
   }
 }

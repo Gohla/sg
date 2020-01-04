@@ -20,9 +20,10 @@ impl Device {
     let create_info = vk::PipelineLayoutCreateInfo::builder()
       .set_layouts(descriptor_set_layouts)
       .push_constant_ranges(push_constant_ranges)
-      .build();
-    debug!("Creating pipeline layout from {:?}", create_info);
-    Ok(self.wrapped.create_pipeline_layout(&create_info, None)?)
+      ;
+    let pipeline_layout = self.wrapped.create_pipeline_layout(&create_info, None)?;
+    debug!("Created pipeline layout {:?}", pipeline_layout);
+    Ok(pipeline_layout)
   }
 
   pub unsafe fn destroy_pipeline_layout(&self, pipeline_layout: PipelineLayout) {
@@ -39,9 +40,10 @@ pub struct PipelineCacheCreateError(#[from] VkError);
 
 impl Device {
   pub unsafe fn create_pipeline_cache(&self) -> Result<PipelineCache, PipelineCacheCreateError> {
-    let create_info = vk::PipelineCacheCreateInfo::builder().build();
-    debug!("Creating pipeline cache from {:?}", create_info);
-    Ok(self.wrapped.create_pipeline_cache(&create_info, None)?)
+    let create_info = vk::PipelineCacheCreateInfo::builder();
+    let pipeline_cache = self.wrapped.create_pipeline_cache(&create_info, None)?;
+    debug!("Created pipeline cache {:?}", pipeline_cache);
+    Ok(pipeline_cache)
   }
 
   pub unsafe fn destroy_pipeline_cache(&self, pipeline_cache: PipelineCache) {
@@ -62,11 +64,12 @@ impl Device {
     pipeline_cache: PipelineCache,
     create_infos: &[GraphicsPipelineCreateInfo]
   ) -> Result<Vec<Pipeline>, GraphicsPipelineCreateError> {
-    debug!("Creating graphics pipelines from {:?}", create_infos);
-    match self.wrapped.create_graphics_pipelines(pipeline_cache, create_infos, None) {
-      Err((_, e)) => Err(e)?,
+    let pipelines = match self.wrapped.create_graphics_pipelines(pipeline_cache, create_infos, None) {
+      Err((_, e)) => Err(e),
       Ok(v) => Ok(v),
-    }
+    }?;
+    debug!("Created graphics pipelines {:?}", pipelines);
+    Ok(pipelines)
   }
 
   pub unsafe fn create_graphics_pipeline(

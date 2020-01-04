@@ -25,9 +25,10 @@ impl Device {
     let code = read_spv(&mut cursor)?;
     let create_info = vk::ShaderModuleCreateInfo::builder()
       .code(&code)
-      .build();
-    debug!("Creating shader module from {:?}", create_info);
-    Ok(self.wrapped.create_shader_module(&create_info, None)?)
+      ;
+    let shader_module = self.wrapped.create_shader_module(&create_info, None)?;
+    debug!("Created shader module {:?}", shader_module);
+    Ok(shader_module)
   }
 
   pub unsafe fn destroy_shader_module(&self, shader_module: ShaderModule) {
@@ -75,7 +76,9 @@ impl ShaderModuleEx for ShaderModule {
     let mut create_info = vk::PipelineShaderStageCreateInfo::builder()
       .stage(stage)
       .module(*self)
-      .name(c_str!("main"));
+      // CORRECTNESS: `name` is taken by pointer but is always alive because it is a 'static literal.
+      .name(c_str!("main"))
+      ;
     if let Some(specialization_info) = specialization_info {
       create_info = create_info.specialization_info(specialization_info)
     }

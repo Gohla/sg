@@ -21,9 +21,10 @@ impl Device {
     };
     let begin_info = vk::CommandBufferBeginInfo::builder()
       .flags(flags)
-      .build();
-    trace!("Beginning command buffer {:?} with {:?}", command_buffer, begin_info);
-    Ok(self.wrapped.begin_command_buffer(command_buffer, &begin_info)?)
+      ;
+    self.wrapped.begin_command_buffer(command_buffer, &begin_info)?;
+    trace!("Begun recording for command buffer {:?}", command_buffer);
+    Ok(())
   }
 }
 
@@ -33,7 +34,7 @@ pub struct CommandBufferEndError(#[from] VkError);
 
 impl Device {
   pub unsafe fn end_command_buffer(&self, command_buffer: CommandBuffer) -> Result<(), CommandBufferEndError> {
-    trace!("Ending command buffer {:?}", command_buffer);
+    trace!("Ending recording for command buffer {:?}", command_buffer);
     Ok(self.wrapped.end_command_buffer(command_buffer)?)
   }
 }
@@ -60,9 +61,11 @@ impl Device {
       .signal_semaphores(signal_semaphores)
       .build()
     ];
-    trace!("Submitting command buffers {:?} with {:?}", command_buffers, submits);
     // TODO: don't assume that command pools are always submitted to the graphics queue.
-    Ok(self.wrapped.queue_submit(self.graphics_queue, &submits, fence)?)
+    // CORRECTNESS: slices are taken by pointer but are alive until `queue_submit` is called.
+    self.wrapped.queue_submit(self.graphics_queue, &submits, fence)?;
+    trace!("Submitted command buffers {:?}", command_buffers);
+    Ok(())
   }
 
   pub unsafe fn submit_command_buffer(

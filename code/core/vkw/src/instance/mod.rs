@@ -16,7 +16,7 @@ use std::ops::Deref;
 use ash::{Instance as VkInstance, InstanceError};
 use ash::version::{EntryV1_0, InstanceV1_0};
 use ash::vk::{self, Result as VkError};
-use log::trace;
+use log::debug;
 use thiserror::Error;
 
 use crate::entry::Entry;
@@ -112,17 +112,22 @@ impl Instance {
   ) -> Result<Self, InstanceCreateError> {
     use InstanceCreateError::*;
     use crate::util::get_enabled_or_missing;
-    use std::ptr;
     use vk::{ApplicationInfo, InstanceCreateInfo};
 
-    let application_info = ApplicationInfo {
-      p_application_name: application_name.map(|n| n.as_ptr()).unwrap_or(ptr::null()),
-      application_version: application_version.unwrap_or_default().into(),
-      p_engine_name: engine_name.map(|n| n.as_ptr()).unwrap_or(ptr::null()),
-      engine_version: engine_version.unwrap_or_default().into(),
-      api_version: max_vulkan_api_version.unwrap_or_default().into(),
-      ..ApplicationInfo::default()
-    };
+    let mut application_info = ApplicationInfo::builder();
+    if let Some(application_name) = application_name {
+      application_info = application_info.application_name(application_name);
+    }
+    if let Some(application_version) = application_version {
+      application_info = application_info.application_version(application_version.into());
+    }
+    if let Some(engine_name) = engine_name {
+      application_info = application_info.engine_name(engine_name);
+    }
+    if let Some(engine_version) = engine_version {
+      application_info = application_info.engine_version(engine_version.into());
+    }
+    application_info = application_info.api_version(max_vulkan_api_version.unwrap_or_default().into());
 
     let InstanceFeaturesQuery {
       wanted_layers,
@@ -154,13 +159,14 @@ impl Instance {
 
     let instance = unsafe { entry.create_instance(&create_info, None) }
       .map_err(|e| InstanceCreateFail(e))?;
+    debug!("Created instance {:?}", instance.handle());
     let features = InstanceFeatures::new(enabled_layers, enabled_extensions);
 
     Ok(Self { entry, wrapped: instance, features })
   }
 
   pub unsafe fn destroy(&mut self) {
-    trace!("Destroying instance {:?}", self.wrapped.handle());
+    debug!("Destroying instance {:?}", self.wrapped.handle());
     self.wrapped.destroy_instance(None);
   }
 }

@@ -21,7 +21,7 @@ use ash::{
   vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, QueueFlags, Result as VkError},
   vk::Queue
 };
-use log::trace;
+use log::debug;
 use thiserror::Error;
 
 use crate::instance::Instance;
@@ -178,8 +178,10 @@ impl Device {
         .queue_create_infos(&queue_create_infos)
         .enabled_extension_names(&enabled_extensions_raw)
         .enabled_features(&required_features);
+      // CORRECTNESS: `queue_priorities` is taken by pointer but is alive until `create_device` is called.
       let device = unsafe { instance.create_device(physical_device, &create_info, None) }
         .map_err(|e| DeviceCreateFail(e))?;
+      debug!("Created device {:?}", device.handle());
       let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index, 0) };
       let present_queue = unsafe { device.get_device_queue(present_queue_index, 0) };
       let features = DeviceFeatures::new(enabled_extensions, required_features);
@@ -197,7 +199,7 @@ impl Device {
   }
 
   pub unsafe fn destroy(&mut self) {
-    trace!("Destroying device {:?}", self.wrapped.handle());
+    debug!("Destroying device {:?}", self.wrapped.handle());
     self.wrapped.destroy_device(None);
   }
 }

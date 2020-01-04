@@ -78,6 +78,7 @@ impl TriangleRenderer {
           .layout(pipeline_layout)
           .render_pass(render_pass)
           ;
+        // CORRECTNESS: slices are taken by pointer but are alive until `create_graphics_pipeline` is called.
         device.create_graphics_pipeline(pipeline_cache, &create_info)?
       };
 

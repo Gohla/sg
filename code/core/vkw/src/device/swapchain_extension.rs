@@ -14,7 +14,7 @@ use std::num::NonZeroU32;
 use std::ops::Deref;
 
 use ash::extensions::khr::Swapchain as SwapchainLoader;
-use ash::vk::{self, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR, CompositeAlphaFlagsKHR};
+use ash::vk::{self, CompositeAlphaFlagsKHR, Extent2D, Fence, ImageView, PresentModeKHR, Queue, Result as VkError, Semaphore, SharingMode, SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainKHR};
 use byte_strings::c_str;
 use log::debug;
 use thiserror::Error;
@@ -133,13 +133,19 @@ impl Swapchain {
       _ => capabilities.current_extent,
     };
     let extent = {
-      let min = capabilities.min_image_extent;
-      let max = capabilities.max_image_extent;
-      let width = if extent.width < min.width { min.width } else if extent.width > max.width { max.width } else { extent.width };
-      let height = if extent.height < min.height { min.height } else if extent.height > max.height { max.height } else { extent.height };
+      let Extent2D { width, height } = extent;
+      let (min_width, min_height) = {
+        let min = capabilities.min_image_extent;
+        (max(1, min.width), max(1, min.height))
+      };
+      let (max_width, max_height) = {
+        let max = capabilities.max_image_extent;
+        (max.width, max.height)
+      };
+      let width = if width < min_width { min_width } else if width > max_width { max_width } else { width };
+      let height = if height < min_height { min_height } else if height > max_height { max_height } else { height };
       Extent2D { width, height }
     };
-    // imageExtent = (1904,991) ||| minImageExtent = (1904,1006), maxImageExtent = (1904,1006)
     let (sharing_mode, queue_family_indices) = {
       let (graphics, present) = (device.graphics_queue_index, device.present_queue_index);
       if graphics == present {
@@ -183,10 +189,9 @@ impl Swapchain {
     if let Some(old_swapchain) = old_swapchain {
       create_info = create_info.old_swapchain(old_swapchain.wrapped);
     }
-    let create_info = create_info.build();
-    debug!("Creating swapchain from {:?}", create_info);
     let swapchain = unsafe { loader.create_swapchain(&create_info, None) }
       .map_err(|e| SwapchainCreateFail(e))?;
+    debug!("Created swapchain {:?}", swapchain);
 
     let images = unsafe { loader.get_swapchain_images(swapchain) }
       .map_err(|e| SwapchainImagesFail(e))?;

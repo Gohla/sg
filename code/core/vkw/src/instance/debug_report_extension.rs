@@ -15,7 +15,7 @@ use std::os::raw::{c_char, c_void};
 use ash::extensions::ext::DebugReport as VkDebugReport;
 use ash::vk::{self, DebugReportCallbackEXT, DebugReportFlagsEXT, DebugReportObjectTypeEXT, Result as VkError};
 use byte_strings::c_str;
-use log::trace;
+use log::debug;
 
 use crate::instance::InstanceFeatures;
 
@@ -36,14 +36,16 @@ impl DebugReport {
 
     let info = DebugReportCallbackCreateInfoEXT::builder()
       .flags(flags)
-      .pfn_callback(Some(vulkan_debug_callback));
+      .pfn_callback(Some(vulkan_debug_callback))
+      ;
     let loader = VkDebugReport::new(&instance.entry.wrapped, &instance.wrapped);
     let callback = unsafe { loader.create_debug_report_callback(&info, None) }?;
+    debug!("Created debug report callback {:?}", callback);
     Ok(Self { loader, callback })
   }
 
   pub unsafe fn destroy(&mut self) {
-    trace!("Destroying debug report callback {:?}", self.callback);
+    debug!("Destroying debug report callback {:?}", self.callback);
     self.loader.destroy_debug_report_callback(self.callback, None);
   }
 }

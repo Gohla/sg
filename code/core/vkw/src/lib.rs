@@ -1,5 +1,7 @@
 pub mod prelude;
+
 pub mod util;
+
 pub mod version;
 pub mod entry;
 pub mod instance;
@@ -13,6 +15,8 @@ pub mod render_pass;
 pub mod framebuffer;
 pub mod shader;
 pub mod graphics_pipeline;
+pub mod allocator;
+
 pub mod renderer;
 pub mod presenter;
 pub mod surface_change_handler;

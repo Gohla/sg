@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 util = {path = "../util"}
 ash = "0.29"
+vk-mem = "0.2"
 raw-window-handle = "0.3"
 byte-strings = "0.1"
 thiserror = "1.0"

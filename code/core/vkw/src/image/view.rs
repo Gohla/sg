@@ -29,9 +29,10 @@ impl Device {
         base_array_layer: 0,
         layer_count,
       })
-      .build();
-    trace!("Creating image view from {:?}", create_info);
-    Ok(unsafe { self.wrapped.create_image_view(&create_info, None) }?)
+      ;
+    let image_view = unsafe { self.wrapped.create_image_view(&create_info, None) }?;
+    trace!("Created image view {:?}", image_view);
+    Ok(image_view)
   }
 
   pub unsafe fn destroy_image_view(&self, image_view: ImageView) {
