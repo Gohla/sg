@@ -20,7 +20,12 @@ fn main() -> Result<()> {
     .with_context(|| "Failed to initialize logger")?;
 
   let mut event_loop = EventLoop::new();
-  let window = WindowBuilder::new().build(&event_loop)
+  let window_min_size = (800, 600);
+  let window = WindowBuilder::new()
+    .with_inner_size(window_min_size.into())
+    .with_min_inner_size(window_min_size.into())
+    .with_title("SG")
+    .build(&event_loop)
     .with_context(|| "Failed to create window")?;
 
   let mut gfx = Gfx::new(
