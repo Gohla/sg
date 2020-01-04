@@ -122,7 +122,7 @@ impl Allocator {
 // Buffer deallocation/destruction
 
 impl BufferAllocation {
-  pub unsafe fn destroy(&mut self, allocator: &Allocator) {
+  pub unsafe fn destroy(&self, allocator: &Allocator) {
     // CORRECTNESS: safe to `ok` - `destroy_buffer` never fails.
     allocator.destroy_buffer(self.buffer, &self.allocation).ok();
   }

@@ -20,7 +20,7 @@ impl TriangleRenderer {
   pub fn new(
     device: &Device,
     allocator: &Allocator,
-    _transient_command_pool: CommandPool,
+    transient_command_pool: CommandPool,
     render_pass: RenderPass,
     pipeline_cache: PipelineCache,
   ) -> Result<Self> {
@@ -100,8 +100,24 @@ impl TriangleRenderer {
       };
 
       let vertex_data = VertexData::triangle_vertex_data();
-      let buffer_allocation = allocator.allocate_device_dynamic_vertex_buffer(size_of::<VertexData>() * vertex_data.len())?;
-      buffer_allocation.map(allocator)?.copy_from_slice(&vertex_data);
+      let vertex_data_size = size_of::<VertexData>() * vertex_data.len();
+
+      let staging_buffer_allocation = allocator.allocate_host_staging_buffer(vertex_data_size)?;
+      staging_buffer_allocation.map(allocator)?.copy_from_slice(&vertex_data);
+      let buffer_allocation = allocator.allocate_device_static_vertex_buffer(vertex_data_size)?;
+      let command_buffer = device.allocate_command_buffer(transient_command_pool, false)?;
+      device.begin_command_buffer(command_buffer, true)?;
+      device.cmd_copy_buffer(command_buffer, staging_buffer_allocation.buffer, buffer_allocation.buffer, &[
+        BufferCopy::builder()
+          .size(vertex_data_size as u64)
+          .build()
+      ]);
+      device.end_command_buffer(command_buffer)?;
+      let fence = device.create_fence(false)?;
+      device.submit_command_buffer(command_buffer, &[], &[], &[], Some(fence))?;
+      device.wait_for_fence(fence, Timeout::Infinite)?;
+      device.destroy_fence(fence);
+      staging_buffer_allocation.destroy(allocator);
 
       Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer_allocation })
     }

@@ -74,8 +74,8 @@ impl Device {
     wait_semaphores: &[Semaphore],
     wait_dst_stage_mask: &[PipelineStageFlags],
     signal_semaphores: &[Semaphore],
-    fence: Fence,
+    fence: Option<Fence>,
   ) -> Result<(), CommandBufferEndError> {
-    self.submit_command_buffers(&[command_buffer], wait_semaphores, wait_dst_stage_mask, signal_semaphores, fence)
+    self.submit_command_buffers(&[command_buffer], wait_semaphores, wait_dst_stage_mask, signal_semaphores, fence.unwrap_or_default())
   }
 }

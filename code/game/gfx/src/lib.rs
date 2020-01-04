@@ -229,7 +229,7 @@ impl Gfx {
         &[render_state.image_acquired_semaphore],
         &[PipelineStageFlags::TOP_OF_PIPE],
         &[render_state.render_complete_semaphore],
-        render_state.render_complete_fence
+        Some(render_state.render_complete_fence)
       ).with_context(|| "Failed to submit command buffer")?;
     }
 
