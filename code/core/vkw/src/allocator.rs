@@ -56,14 +56,14 @@ pub struct BufferAllocation {
 pub struct BufferAllocationError(#[from] VkMemError);
 
 impl Allocator {
-  pub unsafe fn allocate_buffer(
+  pub unsafe fn create_buffer(
     &self,
     size: usize,
     buffer_usage: BufferUsageFlags,
     memory_usage: MemoryUsage,
     flags: AllocationCreateFlags,
   ) -> Result<BufferAllocation, BufferAllocationError> {
-    let (buffer, allocation, info) = self.create_buffer(
+    let (buffer, allocation, info) = self.wrapped.create_buffer(
       &BufferCreateInfo::builder().size(size as DeviceSize).usage(buffer_usage),
       &AllocationCreateInfo { usage: memory_usage, flags, ..AllocationCreateInfo::default() }
     )?;
@@ -71,51 +71,51 @@ impl Allocator {
   }
 
 
-  pub unsafe fn allocate_host_staging_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::TRANSFER_SRC, MemoryUsage::CpuOnly, AllocationCreateFlags::NONE)
+  pub unsafe fn create_staging_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::TRANSFER_SRC, MemoryUsage::CpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn allocate_host_staging_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::TRANSFER_SRC, MemoryUsage::CpuOnly, AllocationCreateFlags::MAPPED)
-  }
-
-
-  pub unsafe fn allocate_device_static_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
-  }
-
-  pub unsafe fn allocate_device_dynamic_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
-  }
-
-  pub unsafe fn allocate_device_dynamic_vertex_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
+  pub unsafe fn create_staging_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::TRANSFER_SRC, MemoryUsage::CpuOnly, AllocationCreateFlags::MAPPED)
   }
 
 
-  pub unsafe fn allocate_device_static_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::INDEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
+  pub unsafe fn create_static_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn allocate_device_dynamic_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
+  pub unsafe fn create_dynamic_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn allocate_device_dynamic_index_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
+  pub unsafe fn create_dynamic_vertex_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 
 
-  pub unsafe fn allocate_device_static_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
+  pub unsafe fn create_static_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::INDEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn allocate_device_dynamic_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
+  pub unsafe fn create_dynamic_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn allocate_device_dynamic_uniform_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
-    self.allocate_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
+  pub unsafe fn create_dynamic_index_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
+  }
+
+
+  pub unsafe fn create_static_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
+  }
+
+  pub unsafe fn create_dynamic_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
+  }
+
+  pub unsafe fn create_dynamic_uniform_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+    self.create_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 }
 
@@ -165,6 +165,14 @@ impl MappedMemory<'_> {
   pub unsafe fn copy_from<T>(&self, src: *const T, count: usize) {
     let dst = self.ptr as *mut T;
     std::ptr::copy_nonoverlapping(src, dst, count);
+  }
+
+  pub unsafe fn copy_from_bytes_slice(&self, src: &[u8]) {
+    self.copy_from(src.as_ptr(), src.len());
+  }
+
+  pub unsafe fn copy_from_bytes(&self, src: *const u8, count: usize) {
+    std::ptr::copy_nonoverlapping(src, self.ptr, count);
   }
 
   pub unsafe fn unmap(self) { /* Just drops self */ }

@@ -1,3 +1,5 @@
+#![feature(never_type)]
+
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};

@@ -30,7 +30,7 @@ fn main() -> Result<()> {
 
   let mut gfx = Gfx::new(
     cfg!(debug_assertions),
-    unsafe { NonZeroU32::new_unchecked(1) },
+    unsafe { NonZeroU32::new_unchecked(2) },
     window.raw_window_handle(),
     window.inner_size()
   ).with_context(|| "Failed to create GFX instance")?;

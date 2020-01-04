@@ -3,12 +3,15 @@ use ash::vk::{self, CommandBuffer, CommandPool, Result as VkError};
 use log::trace;
 use thiserror::Error;
 
+use crate::command_buffer::{CommandBufferBeginError, CommandBufferEndError, CommandBufferSubmitError};
 use crate::device::Device;
+use crate::sync::{FenceCreateError, FenceWaitError};
+use crate::timeout::Timeout;
 
 // Creation and destruction
 
 #[derive(Error, Debug)]
-#[error("Failed to create command pool")]
+#[error("Failed to create command pool: {0:?}")]
 pub struct CommandPoolCreateError(#[from] VkError);
 
 impl Device {
@@ -39,7 +42,7 @@ impl Device {
 // Reset
 
 #[derive(Error, Debug)]
-#[error("Failed to reset command pool")]
+#[error("Failed to reset command pool: {0:?}")]
 pub struct CommandPoolResetError(#[from] VkError);
 
 impl Device {
@@ -59,7 +62,7 @@ impl Device {
 // Allocating/freeing command buffers
 
 #[derive(Error, Debug)]
-#[error("Failed to allocate command buffers from pool")]
+#[error("Failed to allocate command buffers from pool: {0:?}")]
 pub struct AllocateCommandBuffersError(#[from] VkError);
 
 impl Device {
@@ -87,5 +90,45 @@ impl Device {
 
   pub unsafe fn free_command_buffer(&self, command_pool: CommandPool, command_buffer: CommandBuffer) {
     self.free_command_buffers(command_pool, &[command_buffer]);
+  }
+}
+
+// Allocate + begin + end + submit + free
+
+#[derive(Error, Debug)]
+pub enum AllocateRecordSubmitWaitError<E: std::error::Error + 'static> {
+  #[error(transparent)]
+  AllocateFail(#[from] AllocateCommandBuffersError),
+  #[error(transparent)]
+  BeginFail(#[from] CommandBufferBeginError),
+  #[error("Failed to record command buffer")]
+  RecordFail(#[source] E),
+  #[error(transparent)]
+  EndFail(#[from] CommandBufferEndError),
+  #[error(transparent)]
+  FenceCreateFail(#[from] FenceCreateError),
+  #[error(transparent)]
+  SubmitFail(#[from] CommandBufferSubmitError),
+  #[error(transparent)]
+  FenceWaitFail(#[from] FenceWaitError)
+}
+
+impl Device {
+  pub unsafe fn allocate_record_submit_wait<T, E: std::error::Error, F: FnOnce(CommandBuffer) -> Result<T, E>>(
+    &self,
+    command_pool: CommandPool,
+    recorder: F
+  ) -> Result<T, AllocateRecordSubmitWaitError<E>> {
+    use AllocateRecordSubmitWaitError::*;
+    let command_buffer = self.allocate_command_buffer(command_pool, false)?;
+    self.begin_command_buffer(command_buffer, true)?;
+    let result = recorder(command_buffer).map_err(|e| RecordFail(e))?;
+    self.end_command_buffer(command_buffer)?;
+    let fence = self.create_fence(false)?;
+    self.submit_command_buffer(command_buffer, &[], &[], &[], Some(fence))?;
+    self.wait_for_fence(fence, Timeout::Infinite)?;
+    self.destroy_fence(fence);
+    self.free_command_buffer(command_pool, command_buffer);
+    Ok(result)
   }
 }

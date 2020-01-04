@@ -53,7 +53,7 @@ impl Device {
     wait_dst_stage_mask: &[PipelineStageFlags],
     signal_semaphores: &[Semaphore],
     fence: Fence,
-  ) -> Result<(), CommandBufferEndError> {
+  ) -> Result<(), CommandBufferSubmitError> {
     let submits = vec![vk::SubmitInfo::builder()
       .wait_semaphores(wait_semaphores)
       .wait_dst_stage_mask(wait_dst_stage_mask)
@@ -75,7 +75,7 @@ impl Device {
     wait_dst_stage_mask: &[PipelineStageFlags],
     signal_semaphores: &[Semaphore],
     fence: Option<Fence>,
-  ) -> Result<(), CommandBufferEndError> {
+  ) -> Result<(), CommandBufferSubmitError> {
     self.submit_command_buffers(&[command_buffer], wait_semaphores, wait_dst_stage_mask, signal_semaphores, fence.unwrap_or_default())
   }
 }

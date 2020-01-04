@@ -102,21 +102,17 @@ impl TriangleRenderer {
       let vertex_data = VertexData::triangle_vertex_data();
       let vertex_data_size = size_of::<VertexData>() * vertex_data.len();
 
-      let staging_buffer_allocation = allocator.allocate_host_staging_buffer(vertex_data_size)?;
+      let staging_buffer_allocation = allocator.create_staging_buffer(vertex_data_size)?;
       staging_buffer_allocation.map(allocator)?.copy_from_slice(&vertex_data);
-      let buffer_allocation = allocator.allocate_device_static_vertex_buffer(vertex_data_size)?;
-      let command_buffer = device.allocate_command_buffer(transient_command_pool, false)?;
-      device.begin_command_buffer(command_buffer, true)?;
-      device.cmd_copy_buffer(command_buffer, staging_buffer_allocation.buffer, buffer_allocation.buffer, &[
-        BufferCopy::builder()
-          .size(vertex_data_size as u64)
-          .build()
-      ]);
-      device.end_command_buffer(command_buffer)?;
-      let fence = device.create_fence(false)?;
-      device.submit_command_buffer(command_buffer, &[], &[], &[], Some(fence))?;
-      device.wait_for_fence(fence, Timeout::Infinite)?;
-      device.destroy_fence(fence);
+      let buffer_allocation = allocator.create_static_vertex_buffer(vertex_data_size)?;
+      device.allocate_record_submit_wait::<_, !, _>(transient_command_pool, |command_buffer| {
+        device.cmd_copy_buffer(command_buffer, staging_buffer_allocation.buffer, buffer_allocation.buffer, &[
+          BufferCopy::builder()
+            .size(vertex_data_size as u64)
+            .build()
+        ]);
+        Ok(())
+      })?;
       staging_buffer_allocation.destroy(allocator);
 
       Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, buffer_allocation })
