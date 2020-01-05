@@ -26,15 +26,11 @@ pub struct RenderState {
   // TODO: track buffer allocations
 }
 
-pub trait CustomRenderState {
-  unsafe fn destroy(&mut self, device: &Device, render_state: &RenderState);
-}
-
 // Creation and destruction
 
 #[derive(Error, Debug)]
-pub enum RenderCreateError<E: std::error::Error + 'static> {
-  #[error("Failed to create command pool")]
+pub enum RenderCreateError {
+  #[error(transparent)]
   CommandPoolCreateFail(#[from] CommandPoolCreateError),
   #[error("Failed to create image acquired semaphore")]
   ImageAcquiredSemaphoreCreateFail(#[source] SemaphoreCreateError),
@@ -43,15 +39,15 @@ pub enum RenderCreateError<E: std::error::Error + 'static> {
   #[error("Failed to create render complete fence")]
   RenderCompleteFenceCreateFail(#[from] FenceCreateError),
   #[error("Failed to create custom render state")]
-  CustomRenderStateCreateFail(#[source] E),
+  CustomRenderStateCreateFail(#[source] anyhow::Error),
 }
 
-impl<T: CustomRenderState> Renderer<T> {
-  pub fn new<E: std::error::Error + 'static, F: Fn(&RenderState) -> Result<T, E>>(
+impl<T> Renderer<T> {
+  pub fn new<F: Fn(&RenderState) -> Result<T, anyhow::Error>>(
     device: &Device,
     state_count: NonZeroU32,
     create_custom_state: F
-  ) -> Result<Renderer<T>, RenderCreateError<E>> {
+  ) -> Result<Renderer<T>, RenderCreateError> {
     use RenderCreateError::*;
     let count = state_count.get() as usize;
     let (states, states_custom) = {
@@ -81,9 +77,9 @@ impl<T: CustomRenderState> Renderer<T> {
     })
   }
 
-  pub unsafe fn destroy(&mut self, device: &Device) {
-    for (state, state_custom) in self.states.iter().zip(self.states_custom.iter_mut()) {
-      state_custom.destroy(&device, state);
+  pub unsafe fn destroy<F: Fn(&RenderState, &T)>(&self, device: &Device, destroy_fn: F) {
+    for (state, state_custom) in self.states.iter().zip(self.states_custom.iter()) {
+      destroy_fn(state, state_custom);
       device.destroy_command_pool(state.command_pool);
       device.destroy_semaphore(state.image_acquired_semaphore);
       device.destroy_semaphore(state.render_complete_semaphore);

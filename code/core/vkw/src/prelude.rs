@@ -4,22 +4,26 @@ pub use ash::{
   Instance as VkInstance,
   version::{EntryV1_0, InstanceV1_0},
   vk::{
-    BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, ColorComponentFlags, CommandBuffer, CommandPool,
-    CullModeFlags, DeviceSize, DynamicState, Extent2D, Fence, Format, Framebuffer, FrontFace,
-    IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout,
-    PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
-    VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
+    BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, ColorComponentFlags, CommandBuffer,
+    CommandPool, CullModeFlags, DescriptorBufferInfo, DescriptorPool,
+    DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
+    DescriptorSetLayoutBinding, DescriptorType, DeviceSize, DynamicState, Extent2D, Fence, Format,
+    Framebuffer, FrontFace, IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint,
+    PipelineCache, PipelineLayout, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags,
+    Semaphore, ShaderModule, ShaderStageFlags, VertexInputAttributeDescription,
+    VertexInputBindingDescription, VertexInputRate, WriteDescriptorSet,
   },
 };
 pub use vk_mem::{AllocationCreateInfo, AllocationInfo, MemoryUsage};
 
 pub use crate::{
   allocator::{Allocator, BufferAllocation},
+  descriptor_set::{self, DescriptorSetUpdateBuilder, WriteDescriptorSetBuilder},
   device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},
   entry::Entry,
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface},
   presenter::Presenter,
-  renderer::{CustomRenderState, Renderer, RenderState},
+  renderer::{Renderer, RenderState},
   shader::ShaderModuleEx,
   surface_change_handler::SurfaceChangeHandler,
   timeout::Timeout,

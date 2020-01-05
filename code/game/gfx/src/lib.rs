@@ -8,11 +8,10 @@ use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
 
-use vkw::command_pool::AllocateCommandBuffersError;
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
 
-use crate::triangle_renderer::TriangleRenderer;
+use crate::triangle_renderer::{TriangleRenderer, TriangleRenderState};
 
 pub mod triangle_renderer;
 
@@ -25,22 +24,18 @@ pub struct Gfx {
   pub transient_command_pool: CommandPool,
   pub swapchain: Swapchain,
   pub pipeline_cache: PipelineCache,
-  pub renderer: Renderer<GameRenderState>,
   pub render_pass: RenderPass,
   pub presenter: Presenter,
   pub surface_change_handler: SurfaceChangeHandler,
 
   pub triangle_renderer: TriangleRenderer,
+
+  pub renderer: Renderer<GameRenderState>,
 }
 
 pub struct GameRenderState {
   pub command_buffer: CommandBuffer,
-}
-
-impl CustomRenderState for GameRenderState {
-  unsafe fn destroy(&mut self, device: &Device, render_state: &RenderState) {
-    device.free_command_buffer(render_state.command_pool, self.command_buffer);
-  }
+  pub triangle_render_state: TriangleRenderState,
 }
 
 impl Gfx {
@@ -102,7 +97,7 @@ impl Gfx {
     let swapchain = {
       let features_query = {
         let mut query = SwapchainFeaturesQuery::new();
-        query.want_image_count(max_frames_in_flight);
+        query.want_image_count(unsafe { NonZeroU32::new_unchecked(max_frames_in_flight.get() + 1) });
         query.want_present_mode(vec![
           PresentModeKHR::IMMEDIATE,
           PresentModeKHR::MAILBOX,
@@ -119,12 +114,6 @@ impl Gfx {
 
     let pipeline_cache = unsafe { device.create_pipeline_cache() }
       .with_context(|| "Failed to create Vulkan pipeline cache")?;
-
-    let renderer = Renderer::new::<AllocateCommandBuffersError, _>(&device, max_frames_in_flight, |state| {
-      Ok(GameRenderState {
-        command_buffer: unsafe { device.allocate_command_buffer(state.command_pool, false) }?
-      })
-    })?;
 
     let render_pass = {
       use vk::{AttachmentDescription, AttachmentLoadOp, AttachmentStoreOp, SubpassDescription, AttachmentReference, ImageLayout};
@@ -166,8 +155,15 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
-    let triangle_renderer = TriangleRenderer::new(&device, &allocator, transient_command_pool, render_pass, pipeline_cache)
+    let triangle_renderer = TriangleRenderer::new(&device, &allocator, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
       .with_context(|| "Failed to create triangle renderer")?;
+
+    let renderer = Renderer::new(&device, max_frames_in_flight, |state| {
+      Ok(GameRenderState {
+        command_buffer: unsafe { device.allocate_command_buffer(state.command_pool, false) }?,
+        triangle_render_state: triangle_renderer.create_render_state(&device, &allocator)?,
+      })
+    })?;
 
     Ok(Self {
       instance,
@@ -178,11 +174,11 @@ impl Gfx {
       transient_command_pool,
       swapchain,
       pipeline_cache,
-      renderer,
       render_pass,
       presenter,
       surface_change_handler,
       triangle_renderer,
+      renderer,
     })
   }
 
@@ -218,7 +214,7 @@ impl Gfx {
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
 
-      self.triangle_renderer.render(&self.device, command_buffer);
+      self.triangle_renderer.render(&self.device, command_buffer, &game_render_state.triangle_render_state);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);
@@ -270,10 +266,13 @@ impl Gfx {
 impl Drop for Gfx {
   fn drop(&mut self) {
     unsafe {
+      self.renderer.destroy(&self.device, |render_state, game_render_state| {
+        self.device.free_command_buffer(render_state.command_pool, game_render_state.command_buffer);
+        game_render_state.triangle_render_state.destroy(&self.allocator);
+      });
       self.triangle_renderer.destroy(&self.device, &self.allocator);
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
-      self.renderer.destroy(&self.device);
       self.device.destroy_command_pool(self.transient_command_pool);
       self.allocator.destroy();
       self.device.destroy_pipeline_cache(self.pipeline_cache);

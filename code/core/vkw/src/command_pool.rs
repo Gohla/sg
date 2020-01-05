@@ -59,7 +59,7 @@ impl Device {
   }
 }
 
-// Allocating/freeing command buffers
+// Command buffer allocation and freeing
 
 #[derive(Error, Debug)]
 #[error("Failed to allocate command buffers from pool: {0:?}")]
@@ -96,13 +96,13 @@ impl Device {
 // Allocate + begin + end + submit + free
 
 #[derive(Error, Debug)]
-pub enum AllocateRecordSubmitWaitError<E: std::error::Error + 'static> {
+pub enum AllocateRecordSubmitWaitError {
   #[error(transparent)]
   AllocateFail(#[from] AllocateCommandBuffersError),
   #[error(transparent)]
   BeginFail(#[from] CommandBufferBeginError),
   #[error("Failed to record command buffer")]
-  RecordFail(#[source] E),
+  RecordFail(#[source] anyhow::Error),
   #[error(transparent)]
   EndFail(#[from] CommandBufferEndError),
   #[error(transparent)]
@@ -114,11 +114,11 @@ pub enum AllocateRecordSubmitWaitError<E: std::error::Error + 'static> {
 }
 
 impl Device {
-  pub unsafe fn allocate_record_submit_wait<T, E: std::error::Error, F: FnOnce(CommandBuffer) -> Result<T, E>>(
+  pub unsafe fn allocate_record_submit_wait<T, F: FnOnce(CommandBuffer) -> Result<T, anyhow::Error>>(
     &self,
     command_pool: CommandPool,
     recorder: F
-  ) -> Result<T, AllocateRecordSubmitWaitError<E>> {
+  ) -> Result<T, AllocateRecordSubmitWaitError> {
     use AllocateRecordSubmitWaitError::*;
     let command_buffer = self.allocate_command_buffer(command_pool, false)?;
     self.begin_command_buffer(command_buffer, true)?;

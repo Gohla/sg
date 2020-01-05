@@ -3,16 +3,24 @@ use std::mem::size_of;
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use ash::vk::{self, Rect2D};
-use ultraviolet::{Vec2, Vec3};
+use ultraviolet::{Mat4, Vec2, Vec3};
 
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
 
+// Triangle renderer
+
 pub struct TriangleRenderer {
+  descriptor_set_layout: DescriptorSetLayout,
+  pipeline_layout: PipelineLayout,
+
+  descriptor_pool: DescriptorPool,
+
   vert_shader: ShaderModule,
   frag_shader: ShaderModule,
-  pipeline_layout: PipelineLayout,
+
   pipeline: Pipeline,
+
   vertex_buffer: BufferAllocation,
   index_buffer: BufferAllocation,
 }
@@ -21,12 +29,17 @@ impl TriangleRenderer {
   pub fn new(
     device: &Device,
     allocator: &Allocator,
-    transient_command_pool: CommandPool,
+    render_state_count: u32,
     render_pass: RenderPass,
     pipeline_cache: PipelineCache,
+    transient_command_pool: CommandPool,
   ) -> Result<Self> {
     unsafe {
-      let pipeline_layout = device.create_pipeline_layout(&[], &[])?;
+      let descriptor_set_layout_bindings = UniformData::bindings();
+      let descriptor_set_layout = device.create_descriptor_set_layout(&descriptor_set_layout_bindings)?;
+      let pipeline_layout = device.create_pipeline_layout(&[descriptor_set_layout], &[])?;
+
+      let descriptor_pool = device.create_descriptor_pool(render_state_count, &[descriptor_set::uniform_pool_size(render_state_count, false)])?;
 
       let vert_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.vert.spv"))?;
       let frag_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.frag.spv"))?;
@@ -113,7 +126,7 @@ impl TriangleRenderer {
       let vertex_buffer = allocator.create_static_vertex_buffer(vertex_data_size)?;
       let index_buffer = allocator.create_static_index_buffer(vertex_data_size)?;
 
-      device.allocate_record_submit_wait::<_, !, _>(transient_command_pool, |command_buffer| {
+      device.allocate_record_submit_wait(transient_command_pool, |command_buffer| {
         device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, vertex_buffer.buffer, &[
           BufferCopy::builder()
             .size(vertex_data_size as u64)
@@ -130,15 +143,51 @@ impl TriangleRenderer {
       index_staging.destroy(allocator);
       vertex_staging.destroy(allocator);
 
-      Ok(Self { vert_shader, frag_shader, pipeline_layout, pipeline, vertex_buffer, index_buffer })
+      Ok(Self {
+        descriptor_set_layout,
+        pipeline_layout,
+        descriptor_pool,
+        vert_shader,
+        frag_shader,
+        pipeline,
+        vertex_buffer,
+        index_buffer,
+      })
     }
   }
 
-  pub fn render(&self, device: &Device, command_buffer: CommandBuffer) {
+  pub fn create_render_state(
+    &self,
+    device: &Device,
+    allocator: &Allocator,
+  ) -> Result<TriangleRenderState> {
     unsafe {
+      let uniform_buffer = allocator.create_dynamic_uniform_buffer_mapped(size_of::<UniformData>())?;
+      let descriptor_set = device.allocate_descriptor_set(self.descriptor_pool, self.descriptor_set_layout)?;
+      DescriptorSetUpdateBuilder::new()
+        .add_uniform_buffer_write(
+          descriptor_set,
+          0,
+          0,
+          false,
+          uniform_buffer.buffer,
+          0,
+          size_of::<UniformData>() as DeviceSize
+        )
+        .do_update(device)
+      ;
+      Ok(TriangleRenderState { uniform_buffer, descriptor_set })
+    }
+  }
+
+  pub fn render(&self, device: &Device, command_buffer: CommandBuffer, render_state: &TriangleRenderState) {
+    let uniform_data = UniformData { mvp: Mat4::identity() };
+    unsafe {
+      render_state.uniform_buffer.get_mapped_data().unwrap(/* CORRECTNESS: buffer is persistently mapped */).copy_from(&uniform_data as *const UniformData, 1);
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
       device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
       device.cmd_bind_index_buffer(command_buffer, self.index_buffer.buffer, 0, IndexType::UINT16);
+      device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[render_state.descriptor_set], &[]);
       device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
     }
   }
@@ -149,13 +198,33 @@ impl TriangleRenderer {
       self.index_buffer.destroy(allocator);
       device.destroy_pipeline(self.pipeline);
       device.destroy_pipeline_layout(self.pipeline_layout);
+      device.destroy_descriptor_set_layout(self.descriptor_set_layout);
+      device.destroy_descriptor_pool(self.descriptor_pool);
       device.destroy_shader_module(self.vert_shader);
       device.destroy_shader_module(self.frag_shader);
     }
   }
 }
 
+// Render state
+
+pub struct TriangleRenderState {
+  uniform_buffer: BufferAllocation,
+  descriptor_set: DescriptorSet,
+}
+
+impl TriangleRenderState {
+  pub fn destroy(&self, allocator: &Allocator) {
+    unsafe {
+      self.uniform_buffer.destroy(allocator);
+    }
+  }
+}
+
+// Vertex data
+
 #[allow(dead_code)]
+#[repr(C)]
 struct VertexData {
   pos: Vec2,
   col: Vec3,
@@ -200,5 +269,19 @@ impl VertexData {
 
   pub fn triangle_index_data() -> Vec<u16> {
     vec![0, 1, 2, 0, 3, 1]
+  }
+}
+
+// Uniform data
+
+#[allow(dead_code)]
+#[repr(C)]
+struct UniformData {
+  mvp: Mat4,
+}
+
+impl UniformData {
+  pub fn bindings() -> Vec<DescriptorSetLayoutBinding> {
+    vec![descriptor_set::uniform_layout_binding(0, 1, false, ShaderStageFlags::VERTEX)]
   }
 }
