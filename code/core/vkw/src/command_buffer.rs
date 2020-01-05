@@ -8,7 +8,7 @@ use crate::device::Device;
 // Beginning/ending command buffers
 
 #[derive(Error, Debug)]
-#[error("Failed to begin command buffer")]
+#[error("Failed to begin command buffer: {0:?}")]
 pub struct CommandBufferBeginError(#[from] VkError);
 
 impl Device {
@@ -29,7 +29,7 @@ impl Device {
 }
 
 #[derive(Error, Debug)]
-#[error("Failed to end command buffer")]
+#[error("Failed to end command buffer: {0:?}")]
 pub struct CommandBufferEndError(#[from] VkError);
 
 impl Device {
@@ -42,7 +42,7 @@ impl Device {
 // Submit
 
 #[derive(Error, Debug)]
-#[error("Failed to submit command buffer")]
+#[error("Failed to submit command buffer: {0:?}")]
 pub struct CommandBufferSubmitError(#[from] VkError);
 
 impl Device {

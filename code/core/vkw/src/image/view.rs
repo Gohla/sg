@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::device::Device;
 
 #[derive(Error, Debug)]
-#[error("Failed to create image view")]
+#[error("Failed to create image view: {0:?}")]
 pub struct ImageViewCreateError(#[from] VkError);
 
 impl Device {

@@ -15,7 +15,7 @@ pub struct Entry {
 
 #[derive(Error, Debug)]
 pub enum EntryCreateError {
-  #[error("Failed to load Vulkan library")]
+  #[error("Failed to load Vulkan library: {0:?}")]
   LoadError(#[from] LoadingError),
 }
 

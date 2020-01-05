@@ -16,6 +16,7 @@ use ash::extensions::ext::DebugReport as VkDebugReport;
 use ash::vk::{self, DebugReportCallbackEXT, DebugReportFlagsEXT, DebugReportObjectTypeEXT, Result as VkError};
 use byte_strings::c_str;
 use log::debug;
+use thiserror::Error;
 
 use crate::instance::InstanceFeatures;
 
@@ -30,8 +31,12 @@ pub struct DebugReport {
 
 // Creation and destruction
 
+#[derive(Error, Debug)]
+#[error("Failed to create debug report callback: {0:?}")]
+pub struct DebugReportCreateError(#[from] VkError);
+
 impl DebugReport {
-  pub fn new(instance: &Instance, flags: DebugReportFlagsEXT) -> Result<Self, VkError> {
+  pub fn new(instance: &Instance, flags: DebugReportFlagsEXT) -> Result<Self, DebugReportCreateError> {
     use vk::DebugReportCallbackCreateInfoEXT;
 
     let info = DebugReportCallbackCreateInfoEXT::builder()

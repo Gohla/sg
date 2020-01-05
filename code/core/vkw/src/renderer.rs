@@ -106,7 +106,7 @@ pub enum RenderStateWaitAndResetError {
   FenceWaitFail(#[from] FenceWaitError),
   #[error("Failed to reset render complete fence")]
   FenceResetFail(#[from] FenceResetError),
-  #[error("Failed to reset command pool")]
+  #[error("Failed to reset primary command pool")]
   CommandPoolResetFail(#[from] CommandPoolResetError),
 }
 

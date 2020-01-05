@@ -86,18 +86,16 @@ impl InstanceFeaturesQuery {
 
 #[derive(Error, Debug)]
 pub enum InstanceCreateError {
-  #[error("Failed to enumerate instance layer properties")]
+  #[error("Failed to enumerate instance layer properties: {0:?}")]
   EnumerateLayerFail(#[source] VkError),
   #[error("One or more required instance layers are missing: {0:?}")]
   RequiredLayersMissing(Vec<CString>),
-  #[error("Failed to enumerate instance extension properties")]
+  #[error("Failed to enumerate instance extension properties: {0:?}")]
   EnumerateExtensionFail(#[source] VkError),
   #[error("One or more required instance extensions are missing: {0:?}")]
   RequiredExtensionsMissing(Vec<CString>),
-  #[error("Failed to create Vulkan instance")]
+  #[error("Failed to create instance: {0:?}")]
   InstanceCreateFail(#[from] InstanceError),
-  #[error("Failed to create Vulkan debug report callback")]
-  DebugReportCallbackCreateFail(#[source] VkError),
 }
 
 impl Instance {

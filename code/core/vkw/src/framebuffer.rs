@@ -8,7 +8,7 @@ use crate::device::Device;
 // Creation and destruction
 
 #[derive(Error, Debug)]
-#[error("Failed to create framebuffer")]
+#[error("Failed to create framebuffer: {0:?}")]
 pub struct FramebufferCreateError(#[from] VkError);
 
 impl Device {

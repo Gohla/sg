@@ -34,7 +34,7 @@ pub struct Surface {
 pub enum SurfaceCreateError {
   #[error("Got a window handle that does not match with the current platform")]
   WindowHandleMismatch,
-  #[error("Failed to create surface")]
+  #[error("Failed to create surface: {0:?}")]
   SurfaceCreateFail(#[source] VkError)
 }
 
@@ -100,7 +100,7 @@ impl InstanceFeaturesQuery {
 
 #[derive(Error, Debug)]
 pub enum SurfaceFormatError {
-  #[error("Failed to get physical device surface formats")]
+  #[error("Failed to get physical device surface formats: {0:?}")]
   PhysicalDeviceSurfaceFormatsFail(#[source] VkError),
   #[error("Failed to find a suitable surface format")]
   NoSuitableSurfaceFormatFound,

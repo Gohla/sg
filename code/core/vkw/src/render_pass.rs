@@ -8,7 +8,7 @@ use crate::device::Device;
 // Creation and destruction
 
 #[derive(Error, Debug)]
-#[error("Failed to create render pass")]
+#[error("Failed to create render pass: {0:?}")]
 pub struct RenderPassCreateError(#[from] VkError);
 
 impl Device {

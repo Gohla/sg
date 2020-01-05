@@ -89,13 +89,13 @@ TODO: provide a more sophisticated way to select a suitable device and queues, w
 
 #[derive(Error, Debug)]
 pub enum PhysicalDeviceCreateError {
-  #[error("Failed to enumerate Vulkan physical devices")]
+  #[error("Failed to enumerate physical devices: {0:?}")]
   EnumeratePhysicalDevicesFail(#[source] VkError),
-  #[error("Failed to enumerate extension properties of Vulkan physical device")]
+  #[error("Failed to enumerate extension properties of physical device: {0:?}")]
   EnumerateExtensionPropertiesFail(#[source] VkError),
-  #[error("Failed to create a Vulkan device")]
+  #[error("Failed to create a device: {0:?}")]
   DeviceCreateFail(#[source] VkError),
-  #[error("Failed to find a suitable Vulkan physical device")]
+  #[error("Failed to find a suitable physical device")]
   NoSuitablePhysicalDeviceFound,
 }
 

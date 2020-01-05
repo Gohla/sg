@@ -9,9 +9,9 @@ pub use ash::{
     DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding,
     DescriptorType, DeviceSize, DynamicState, Extent2D, Fence, Format,
     Framebuffer, FrontFace, IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint,
-    PipelineCache, PipelineLayout, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags,
-    Semaphore, ShaderModule, ShaderStageFlags, VertexInputAttributeDescription,
-    VertexInputBindingDescription, VertexInputRate,
+    PipelineCache, PipelineLayout, PipelineShaderStageCreateInfoBuilder, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass,
+    SampleCountFlags, Semaphore, ShaderModule, ShaderStageFlags,
+    VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
   },
 };
 pub use vk_mem::{AllocationInfo, MemoryUsage};

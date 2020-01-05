@@ -49,8 +49,8 @@ impl TriangleRenderer {
 
       let pipeline = {
         let stages = &[
-          vert_shader.create_vertex_shader_stage(None),
-          frag_shader.create_fragment_shader_stage(None),
+          vert_shader.create_vertex_shader_stage(None).build(),
+          frag_shader.create_fragment_shader_stage(None).build(),
         ];
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
           .vertex_binding_descriptions(&vertex_bindings)

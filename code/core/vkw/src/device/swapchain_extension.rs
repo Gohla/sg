@@ -71,21 +71,21 @@ impl Default for SwapchainFeaturesQuery {
 
 #[derive(Error, Debug)]
 pub enum SwapchainCreateError {
-  #[error("Failed to get surface format")]
+  #[error(transparent)]
   SurfaceFormatFail(#[from] SurfaceFormatError),
   #[error("Failed to get surface capabilities: {0:?}")]
   SurfaceCapabilitiesFail(#[source] VkError),
   #[error("Failed to find support composite alpha mode")]
-  NoCompositeAlphaModeFound(),
+  NoCompositeAlphaModeFound,
   #[error("Failed to get surface present modes: {0:?}")]
   SurfacePresentModesFail(#[source] VkError),
   #[error("Failed to find present mode")]
-  NoPresentModeFound(),
+  NoPresentModeFound,
   #[error("Failed to create swapchain: {0:?}")]
   SwapchainCreateFail(#[source] VkError),
   #[error("Failed to get swapchain images: {0:?}")]
   SwapchainImagesFail(#[source] VkError),
-  #[error("Failed to create image views for swapchain images")]
+  #[error(transparent)]
   SwapchainImageViewsCreateFail(#[from] ImageViewCreateError),
 }
 
@@ -162,13 +162,13 @@ impl Swapchain {
     let composite_alpha = if capabilities.supported_composite_alpha.contains(CompositeAlphaFlagsKHR::OPAQUE) {
       CompositeAlphaFlagsKHR::OPAQUE
     } else {
-      return Err(NoCompositeAlphaModeFound())
+      return Err(NoCompositeAlphaModeFound)
     };
     let present_mode = {
       let available_present_modes = unsafe { surface.get_present_modes(device.physical_device) }
         .map_err(|e| SurfacePresentModesFail(e))?;
       Self::select_present_mode(available_present_modes, features_query.wanted_present_modes_ord.clone())
-        .ok_or(NoPresentModeFound())?
+        .ok_or(NoPresentModeFound)?
     };
 
     let mut create_info = vk::SwapchainCreateInfoKHR::builder()
