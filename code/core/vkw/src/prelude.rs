@@ -5,16 +5,16 @@ pub use ash::{
   version::{EntryV1_0, InstanceV1_0},
   vk::{
     BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, ColorComponentFlags, CommandBuffer,
-    CommandPool, CullModeFlags, DescriptorBufferInfo, DescriptorPool,
-    DescriptorPoolSize, DescriptorSet, DescriptorSetAllocateInfo, DescriptorSetLayout,
-    DescriptorSetLayoutBinding, DescriptorType, DeviceSize, DynamicState, Extent2D, Fence, Format,
+    CommandPool, CullModeFlags, DescriptorPool,
+    DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding,
+    DescriptorType, DeviceSize, DynamicState, Extent2D, Fence, Format,
     Framebuffer, FrontFace, IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint,
     PipelineCache, PipelineLayout, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass, SampleCountFlags,
     Semaphore, ShaderModule, ShaderStageFlags, VertexInputAttributeDescription,
-    VertexInputBindingDescription, VertexInputRate, WriteDescriptorSet,
+    VertexInputBindingDescription, VertexInputRate,
   },
 };
-pub use vk_mem::{AllocationCreateInfo, AllocationInfo, MemoryUsage};
+pub use vk_mem::{AllocationInfo, MemoryUsage};
 
 pub use crate::{
   allocator::{Allocator, BufferAllocation},
