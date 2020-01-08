@@ -12,12 +12,18 @@ use winit::{
 use winit::platform::desktop::EventLoopExtDesktop;
 
 use gfx::Gfx;
+use sim::legion_sim::Sim;
+use util::timing::Duration;
+
+use crate::timing::{FrameTime, FrameTimer, TickTimer};
 
 pub mod timing;
 
 fn main() -> Result<()> {
   simple_logger::init_with_level(log::Level::Debug)
     .with_context(|| "Failed to initialize logger")?;
+
+  let mut sim = Sim::new();
 
   let mut event_loop = EventLoop::new();
   let window_min_size = (800, 600);
@@ -37,7 +43,14 @@ fn main() -> Result<()> {
 
   let (tx, rx) = mpsc::channel();
   let thread = thread::spawn(move || {
+    let mut frame_timer = FrameTimer::new();
+    let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
+
     'main: loop {
+      let FrameTime { frame_time, .. } = frame_timer.frame();
+      tick_timer.update_lag(frame_time);
+
+      // Handle OS events.
       for window_event in rx.try_iter() {
         match window_event {
           WindowEvent::CloseRequested => break 'main,
@@ -45,7 +58,16 @@ fn main() -> Result<()> {
           _ => {}
         }
       }
-      gfx.render_frame().unwrap();
+
+      if tick_timer.should_tick() {
+        while tick_timer.should_tick() { // Run simulation.
+          tick_timer.tick_start();
+          sim.simulate(tick_timer.time_target());
+          tick_timer.tick_end();
+        }
+      }
+
+      gfx.render_frame(tick_timer.extrapolation()).unwrap();
     }
     gfx.wait_idle().unwrap();
   });

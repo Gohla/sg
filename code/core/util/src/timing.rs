@@ -110,21 +110,3 @@ impl Timer {
     Time { elapsed, delta }
   }
 }
-
-
-#[inline]
-pub fn timed<F: FnMut()>(mut func: F) -> Duration {
-  let start = Instant::now();
-  func();
-  let end = Instant::now();
-  start.to(end)
-}
-
-#[inline]
-pub fn timed_ref<T, F: FnMut() -> T>(mut func: F, duration: &mut Duration) -> T {
-  let start = Instant::now();
-  let ret = func();
-  let end = Instant::now();
-  *duration = start.to(end);
-  ret
-}

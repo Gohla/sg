@@ -1,2 +1,2 @@
 pub mod timing;
-pub mod sampler;
+pub mod image;

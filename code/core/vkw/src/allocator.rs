@@ -1,7 +1,7 @@
 use core::ptr;
 use std::ops::Deref;
 
-use ash::vk::{Buffer, BufferCreateInfo, BufferUsageFlags, DeviceSize};
+use ash::vk::{self, Buffer, BufferUsageFlags, DeviceSize, Image, ImageCreateInfo};
 use log::debug;
 use thiserror::Error;
 use vk_mem::{Allocation, AllocationCreateFlags, AllocationCreateInfo, AllocationInfo, Allocator as VkMemAllocator, AllocatorCreateInfo, Error as VkMemError, MemoryUsage};
@@ -43,7 +43,7 @@ impl Allocator {
   }
 }
 
-// Buffer allocation
+// Buffer creation
 
 pub struct BufferAllocation {
   pub buffer: Buffer,
@@ -63,10 +63,16 @@ impl Allocator {
     memory_usage: MemoryUsage,
     flags: AllocationCreateFlags,
   ) -> Result<BufferAllocation, BufferAllocationError> {
-    let (buffer, allocation, info) = self.wrapped.create_buffer(
-      &BufferCreateInfo::builder().size(size as DeviceSize).usage(buffer_usage),
-      &AllocationCreateInfo { usage: memory_usage, flags, ..AllocationCreateInfo::default() }
-    )?;
+    let buffer_info = vk::BufferCreateInfo::builder()
+      .size(size as DeviceSize)
+      .usage(buffer_usage)
+      ;
+    let allocation_info = AllocationCreateInfo {
+      usage: memory_usage,
+      flags,
+      ..AllocationCreateInfo::default()
+    };
+    let (buffer, allocation, info) = self.wrapped.create_buffer(&buffer_info, &allocation_info)?;
     Ok(BufferAllocation { buffer, allocation, info })
   }
 
@@ -119,12 +125,50 @@ impl Allocator {
   }
 }
 
-// Buffer deallocation/destruction
+// Buffer destruction
 
 impl BufferAllocation {
   pub unsafe fn destroy(&self, allocator: &Allocator) {
     // CORRECTNESS: safe to `ok` - `destroy_buffer` never fails.
     allocator.destroy_buffer(self.buffer, &self.allocation).ok();
+  }
+}
+
+// Image creation
+
+pub struct ImageAllocation {
+  pub image: Image,
+  pub allocation: Allocation,
+  pub info: AllocationInfo,
+}
+
+#[derive(Error, Debug)]
+#[error("Failed to allocate image: {0:?}")]
+pub struct ImageAllocationError(#[from] VkMemError);
+
+impl Allocator {
+  pub unsafe fn create_image(
+    &self,
+    image_info: &ImageCreateInfo,
+    memory_usage: MemoryUsage,
+    flags: AllocationCreateFlags,
+  ) -> Result<ImageAllocation, ImageAllocationError> {
+    let allocation_info = AllocationCreateInfo {
+      usage: memory_usage,
+      flags,
+      ..AllocationCreateInfo::default()
+    };
+    let (image, allocation, info) = self.wrapped.create_image(image_info, &allocation_info)?;
+    Ok(ImageAllocation { image, allocation, info })
+  }
+}
+
+// Image destruction
+
+impl ImageAllocation {
+  pub unsafe fn destroy(&self, allocator: &Allocator) {
+    // CORRECTNESS: safe to `ok` - `destroy_buffer` never fails.
+    allocator.destroy_image(self.image, &self.allocation).ok();
   }
 }
 
@@ -137,24 +181,6 @@ pub struct MemoryMapError(#[from] VkMemError);
 pub struct MappedMemory<'a> {
   ptr: *mut u8,
   unmap: Option<(&'a Allocator, &'a Allocation)>,
-}
-
-impl BufferAllocation {
-  /// Returns a pointer to the mapped data if memory is persistently mapped, `None` otherwise.
-  pub unsafe fn get_mapped_data(&self) -> Option<MappedMemory> {
-    let ptr = self.info.get_mapped_data();
-    if ptr == ptr::null_mut() {
-      None
-    } else {
-      Some(MappedMemory { ptr, unmap: None })
-    }
-  }
-
-  pub unsafe fn map<'a>(&'a self, allocator: &'a Allocator) -> Result<MappedMemory<'a>, MemoryMapError> {
-    let allocation = &self.allocation;
-    let ptr = allocator.map_memory(allocation)?;
-    Ok(MappedMemory { ptr, unmap: Some((allocator, allocation)) })
-  }
 }
 
 impl MappedMemory<'_> {
@@ -177,6 +203,25 @@ impl MappedMemory<'_> {
 
   pub unsafe fn unmap(self) { /* Just drops self */ }
 }
+
+impl BufferAllocation {
+  /// Returns a pointer to the mapped data if memory is persistently mapped, `None` otherwise.
+  pub unsafe fn get_mapped_data(&self) -> Option<MappedMemory> {
+    let ptr = self.info.get_mapped_data();
+    if ptr == ptr::null_mut() {
+      None
+    } else {
+      Some(MappedMemory { ptr, unmap: None })
+    }
+  }
+
+  pub unsafe fn map<'a>(&'a self, allocator: &'a Allocator) -> Result<MappedMemory<'a>, MemoryMapError> {
+    let allocation = &self.allocation;
+    let ptr = allocator.map_memory(allocation)?;
+    Ok(MappedMemory { ptr, unmap: Some((allocator, allocation)) })
+  }
+}
+
 
 // Implementations
 

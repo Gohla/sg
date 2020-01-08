@@ -7,3 +7,5 @@ publish = false
 
 [dependencies]
 time = "0.2"
+stb_image = "0.2"
+thiserror = "1.0"

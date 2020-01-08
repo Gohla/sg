@@ -8,3 +8,4 @@ publish = false
 [dependencies]
 util = {path = "../../core/util"}
 legion = "0.2"
+ultraviolet = "0.4"

@@ -182,7 +182,7 @@ impl Gfx {
     })
   }
 
-  pub fn render_frame(&mut self) -> Result<()> {
+  pub fn render_frame(&mut self, _extrapolation: f64) -> Result<()> {
     // Recreate surface-extent dependent items if needed.
     if let Some(extent) = self.surface_change_handler.query_surface_change(self.swapchain.extent) {
       unsafe {

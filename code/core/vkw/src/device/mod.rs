@@ -16,10 +16,12 @@ use std::ops::Deref;
 
 use ash::{
   Device as VkDevice,
-  version::DeviceV1_0,
-  version::InstanceV1_0,
-  vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, QueueFlags, Result as VkError},
-  vk::Queue
+  Instance as VkInstance,
+  version::{
+    DeviceV1_0,
+    InstanceV1_0
+  },
+  vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, QueueFlags, Result as VkError, Queue},
 };
 use log::debug;
 use thiserror::Error;
@@ -32,8 +34,9 @@ pub mod swapchain_extension;
 // Wrapper
 
 pub struct Device {
-  pub wrapped: VkDevice,
+  pub instance: VkInstance,
   pub physical_device: VkPhysicalDevice,
+  pub wrapped: VkDevice,
   pub graphics_queue_index: u32,
   pub graphics_queue: Queue,
   pub present_queue_index: u32,
@@ -186,8 +189,9 @@ impl Device {
       let present_queue = unsafe { device.get_device_queue(present_queue_index, 0) };
       let features = DeviceFeatures::new(enabled_extensions, required_features);
       return Ok(Self {
-        wrapped: device,
+        instance: instance.wrapped.clone(),
         physical_device,
+        wrapped: device,
         graphics_queue_index,
         graphics_queue,
         present_queue_index,

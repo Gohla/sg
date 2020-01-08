@@ -177,6 +177,7 @@ impl DescriptorSetUpdateBuilder {
 
 #[derive(Default)]
 pub struct WriteDescriptorSetBuilder {
+  // TODO: this should keep a builder internally and only store vecs
   dst_set: DescriptorSet,
   dst_binding: u32,
   dst_array_element: u32,
