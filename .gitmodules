@@ -1,0 +1,4 @@
+[submodule "asset"]
+	path = asset
+	url = git@github.com:Gohla/sg_asset.git
+	branch = experimental
