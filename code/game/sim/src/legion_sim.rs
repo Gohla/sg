@@ -3,7 +3,7 @@ use legion::prelude::*;
 
 use util::timing::Duration;
 
-use crate::{Grid, GridCoords, GridDynamics, InGridBackgroundRender, InGridPosition};
+use crate::{Grid, GridCoords, GridDynamics};
 
 pub struct Sim {
   world: World
@@ -18,11 +18,11 @@ impl Sim {
       (grid, GridCoords::new(1.0, 1.0, 10.0), GridDynamics::new(0.0, 0.1, 0.0)),
     ]);
 
-    world.insert((grid,), vec![
-      (InGridPosition::new(0, 0), InGridBackgroundRender(0)),
-      (InGridPosition::new(-1, 0), InGridBackgroundRender(0)),
-      (InGridPosition::new(0, 10), InGridBackgroundRender(1)),
-    ]);
+//    world.insert((grid,), vec![
+////      (InGridPosition::new(0, 0), InGridBackgroundRender(0)),
+////      (InGridPosition::new(-1, 0), InGridBackgroundRender(0)),
+////      (InGridPosition::new(0, 10), InGridBackgroundRender(1)),
+//    ]);
 
     Self { world }
   }

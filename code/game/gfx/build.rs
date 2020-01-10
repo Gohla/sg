@@ -9,9 +9,7 @@ fn main() {
   let mut compiler = Compiler::new().unwrap();
   let src_dir = Path::new("src");
   let dst_dir = Path::new("../../../target/shader");
-  fs::create_dir_all(dst_dir)
-    .unwrap_or_else(|e| panic!("Failed to create destination directory '{}': {:}", dst_dir.display(), e));
-  compiler.compile_shader_pair(src_dir, dst_dir, "triangle");
+  compiler.compile_shader_pair(src_dir.join("grid_renderer"), dst_dir.join("grid_renderer"), "grid");
 }
 
 
@@ -42,6 +40,8 @@ impl CompilerEx for Compiler {
       "main",
       None
     ).unwrap_or_else(|e| panic!("Failed to compile shader file '{}': {:?}", src_path.display(), e));
+    fs::create_dir_all(dst_path.parent().unwrap())
+      .unwrap_or_else(|e| panic!("Failed to create destination directory '{}': {:}", dst_path.display(), e));
     let mut writer = OpenOptions::new()
       .write(true)
       .create(true)

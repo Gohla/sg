@@ -3,6 +3,7 @@ use ash::vk::{self, CommandBuffer, CommandPool, Result as VkError};
 use log::trace;
 use thiserror::Error;
 
+use crate::allocator::{Allocator, BufferAllocation};
 use crate::command_buffer::{CommandBufferBeginError, CommandBufferEndError, CommandBufferSubmitError};
 use crate::device::Device;
 use crate::sync::{FenceCreateError, FenceWaitError};
@@ -130,5 +131,49 @@ impl Device {
     self.destroy_fence(fence);
     self.free_command_buffer(command_pool, command_buffer);
     Ok(result)
+  }
+
+  pub unsafe fn allocate_record_resources_submit_wait<
+    T,
+    R: RecordedResource<T>,
+    RI: IntoIterator<Item=R>,
+    F: FnOnce(CommandBuffer) -> Result<RI, anyhow::Error>
+  >(
+    &self,
+    allocator: &Allocator,
+    command_pool: CommandPool,
+    recorder: F
+  ) -> Result<Vec<T>, AllocateRecordSubmitWaitError> {
+    use AllocateRecordSubmitWaitError::*;
+    let command_buffer = self.allocate_command_buffer(command_pool, false)?;
+    self.begin_command_buffer(command_buffer, true)?;
+    let result = recorder(command_buffer).map_err(|e| RecordFail(e))?;
+    self.end_command_buffer(command_buffer)?;
+    let fence = self.create_fence(false)?;
+    self.submit_command_buffer(command_buffer, &[], &[], &[], Some(fence))?;
+    self.wait_for_fence(fence, Timeout::Infinite)?;
+    self.destroy_fence(fence);
+    self.free_command_buffer(command_pool, command_buffer);
+    Ok(result.into_iter().map(|r| r.unwrap(self, allocator)).collect())
+  }
+}
+
+pub trait RecordedResource<T> {
+  unsafe fn unwrap(self, device: &Device, allocator: &Allocator) -> T;
+}
+
+pub struct RecordedStagingBuffer<T> {
+  staging_buffer: BufferAllocation,
+  result: T
+}
+
+impl<T> RecordedStagingBuffer<T> {
+  pub fn new(staging_buffer: BufferAllocation, result: T) -> Self { Self { staging_buffer, result } }
+}
+
+impl<T> RecordedResource<T> for RecordedStagingBuffer<T> {
+  unsafe fn unwrap(self, _device: &Device, allocator: &Allocator) -> T {
+    self.staging_buffer.destroy(allocator);
+    self.result
   }
 }

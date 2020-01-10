@@ -22,13 +22,21 @@ impl Device {
       .image(image)
       .view_type(view_type)
       .format(format)
-      .subresource_range(vk::ImageSubresourceRange {
-        aspect_mask,
-        base_mip_level: 0,
-        level_count: 1,
-        base_array_layer: 0,
-        layer_count,
-      })
+      .components(vk::ComponentMapping::builder()
+        .r(vk::ComponentSwizzle::IDENTITY)
+        .g(vk::ComponentSwizzle::IDENTITY)
+        .b(vk::ComponentSwizzle::IDENTITY)
+        .a(vk::ComponentSwizzle::IDENTITY)
+        .build()
+      )
+      .subresource_range(vk::ImageSubresourceRange::builder()
+        .aspect_mask(aspect_mask)
+        .base_mip_level(0)
+        .level_count(1)
+        .base_array_layer(0)
+        .layer_count(layer_count)
+        .build()
+      )
       ;
     let image_view = unsafe { self.wrapped.create_image_view(&create_info, None) }?;
     trace!("Created image view {:?}", image_view);

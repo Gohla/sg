@@ -106,7 +106,6 @@ impl ImageData {
       for x in 0..width {
         let data_idx = (x + (y * width)) * components;
         let tile_idx = (x / tile_width) + ((y / tile_height) * num_tiles_height);
-        //println!("x: {}, y: {}, data_idx: {}, tile_idx: {}", x, y, data_idx, tile_idx);
         for c in 0..components {
           let d: u8 = data[data_idx + c];
           let tile: &mut Vec<u8> = &mut tiles[tile_idx];
@@ -172,6 +171,7 @@ pub trait Storage {
 }
 
 
+#[derive(Debug)]
 pub struct DecodedStorage {
   ptr: *mut u8,
   size: usize,
@@ -189,6 +189,7 @@ impl Drop for DecodedStorage {
 }
 
 
+#[derive(Debug)]
 pub struct VecStorage {
   data: Vec<u8>,
 }

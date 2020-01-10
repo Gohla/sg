@@ -1,4 +1,5 @@
 use core::ptr;
+use std::mem::size_of;
 use std::ops::Deref;
 
 use ash::vk::{self, Buffer, BufferUsageFlags, DeviceSize, Image, ImageCreateInfo};
@@ -124,6 +125,29 @@ impl Allocator {
     self.create_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 }
+
+// Staging buffer creation
+
+#[derive(Error, Debug)]
+pub enum StagingBufferAllocationError {
+  #[error(transparent)]
+  BufferAllocationFail(#[from] BufferAllocationError),
+  #[error(transparent)]
+  MemoryMapFail(#[from] MemoryMapError)
+}
+
+impl Allocator {
+  pub unsafe fn create_staging_from_slice<T>(&self, slice: &[T]) -> Result<BufferAllocation, StagingBufferAllocationError> {
+    let size = size_of::<T>() * slice.len();
+    let buffer_allocation = self.create_staging_buffer(size)?;
+    {
+      let mapped = buffer_allocation.map(self)?;
+      mapped.copy_from_slice(slice);
+    }
+    Ok(buffer_allocation)
+  }
+}
+
 
 // Buffer destruction
 

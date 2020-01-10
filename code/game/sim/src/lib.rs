@@ -42,12 +42,3 @@ pub enum InGridRotation {
   Down,
   Left
 }
-
-#[derive(Debug)]
-pub struct InGridBackgroundRender(u16);
-
-#[derive(Debug)]
-pub struct InGridRender(u16);
-
-#[derive(Debug)]
-pub struct InGridForegroundRender(u16);

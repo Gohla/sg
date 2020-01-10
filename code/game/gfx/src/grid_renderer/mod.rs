@@ -8,9 +8,15 @@ use ultraviolet::{Mat4, Vec2, Vec3};
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
 
-// Triangle renderer
+use crate::texture_def::TextureIdx;
 
-pub struct TriangleRenderer {
+// Grid renderer component
+
+pub struct InGridRender(TextureIdx);
+
+// Grid renderer system
+
+pub struct GridRendererSys {
   descriptor_set_layout: DescriptorSetLayout,
   pipeline_layout: PipelineLayout,
 
@@ -25,7 +31,7 @@ pub struct TriangleRenderer {
   index_buffer: BufferAllocation,
 }
 
-impl TriangleRenderer {
+impl GridRendererSys {
   pub fn new(
     device: &Device,
     allocator: &Allocator,
@@ -41,8 +47,8 @@ impl TriangleRenderer {
 
       let descriptor_pool = device.create_descriptor_pool(render_state_count, &[descriptor_set::uniform_pool_size(render_state_count, false)])?;
 
-      let vert_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.vert.spv"))?;
-      let frag_shader = device.create_shader_module(include_bytes!("../../../../target/shader/triangle.frag.spv"))?;
+      let vert_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.vert.spv"))?;
+      let frag_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.frag.spv"))?;
 
       let vertex_bindings = VertexData::bindings();
       let vertex_attributes = VertexData::attributes();
@@ -160,7 +166,7 @@ impl TriangleRenderer {
     &self,
     device: &Device,
     allocator: &Allocator,
-  ) -> Result<TriangleRenderState> {
+  ) -> Result<GridRenderState> {
     unsafe {
       let uniform_buffer = allocator.create_dynamic_uniform_buffer_mapped(size_of::<UniformData>())?;
       let descriptor_set = device.allocate_descriptor_set(self.descriptor_pool, self.descriptor_set_layout)?;
@@ -176,11 +182,11 @@ impl TriangleRenderer {
         )
         .do_update(device)
       ;
-      Ok(TriangleRenderState { uniform_buffer, descriptor_set })
+      Ok(GridRenderState { uniform_buffer, descriptor_set })
     }
   }
 
-  pub fn render(&self, device: &Device, command_buffer: CommandBuffer, render_state: &TriangleRenderState) {
+  pub fn render(&self, device: &Device, command_buffer: CommandBuffer, render_state: &GridRenderState) {
     let uniform_data = UniformData { mvp: Mat4::identity() };
     unsafe {
       render_state.uniform_buffer.get_mapped_data().unwrap(/* CORRECTNESS: buffer is persistently mapped */).copy_from(&uniform_data as *const UniformData, 1);
@@ -208,12 +214,12 @@ impl TriangleRenderer {
 
 // Render state
 
-pub struct TriangleRenderState {
+pub struct GridRenderState {
   uniform_buffer: BufferAllocation,
   descriptor_set: DescriptorSet,
 }
 
-impl TriangleRenderState {
+impl GridRenderState {
   pub fn destroy(&self, allocator: &Allocator) {
     unsafe {
       self.uniform_buffer.destroy(allocator);

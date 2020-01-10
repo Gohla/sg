@@ -8,12 +8,15 @@ use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
 
+use util::image::{Components, ImageData};
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
 
-use crate::triangle_renderer::{TriangleRenderer, TriangleRenderState};
+use crate::grid_renderer::{GridRendererSys, GridRenderState};
+use crate::texture_def::{TextureDef, TextureDefBuilder};
 
-pub mod triangle_renderer;
+pub mod grid_renderer;
+pub mod texture_def;
 
 pub struct Gfx {
   pub instance: Instance,
@@ -28,14 +31,16 @@ pub struct Gfx {
   pub presenter: Presenter,
   pub surface_change_handler: SurfaceChangeHandler,
 
-  pub triangle_renderer: TriangleRenderer,
+  pub texture_def: TextureDef,
+
+  pub grid_render_sys: GridRendererSys,
 
   pub renderer: Renderer<GameRenderState>,
 }
 
 pub struct GameRenderState {
   pub command_buffer: CommandBuffer,
-  pub triangle_render_state: TriangleRenderState,
+  pub grid_render_sys: GridRenderState,
 }
 
 impl Gfx {
@@ -155,13 +160,21 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
-    let triangle_renderer = TriangleRenderer::new(&device, &allocator, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
+    let texture_def = {
+      let mut builder = TextureDefBuilder::new();
+      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/dark.png"), Some(Components::Components4))?);
+      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/light.png"), Some(Components::Components4))?);
+      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
+      unsafe { builder.build(&device, &allocator, transient_command_pool) }?
+    };
+
+    let grid_render_sys = GridRendererSys::new(&device, &allocator, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
       .with_context(|| "Failed to create triangle renderer")?;
 
     let renderer = Renderer::new(&device, max_frames_in_flight, |state| {
       Ok(GameRenderState {
         command_buffer: unsafe { device.allocate_command_buffer(state.command_pool, false) }?,
-        triangle_render_state: triangle_renderer.create_render_state(&device, &allocator)?,
+        grid_render_sys: grid_render_sys.create_render_state(&device, &allocator)?,
       })
     })?;
 
@@ -177,7 +190,11 @@ impl Gfx {
       render_pass,
       presenter,
       surface_change_handler,
-      triangle_renderer,
+
+      texture_def,
+
+      grid_render_sys,
+
       renderer,
     })
   }
@@ -214,7 +231,7 @@ impl Gfx {
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
 
-      self.triangle_renderer.render(&self.device, command_buffer, &game_render_state.triangle_render_state);
+      self.grid_render_sys.render(&self.device, command_buffer, &game_render_state.grid_render_sys);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);
@@ -268,9 +285,13 @@ impl Drop for Gfx {
     unsafe {
       self.renderer.destroy(&self.device, |render_state, game_render_state| {
         self.device.free_command_buffer(render_state.command_pool, game_render_state.command_buffer);
-        game_render_state.triangle_render_state.destroy(&self.allocator);
+        game_render_state.grid_render_sys.destroy(&self.allocator);
       });
-      self.triangle_renderer.destroy(&self.device, &self.allocator);
+
+      self.grid_render_sys.destroy(&self.device, &self.allocator);
+
+      self.texture_def.destroy(&self.device, &self.allocator);
+
       self.presenter.destroy(&self.device);
       self.device.destroy_render_pass(self.render_pass);
       self.device.destroy_command_pool(self.transient_command_pool);

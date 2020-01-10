@@ -4,7 +4,8 @@ use thiserror::Error;
 
 use util::image::{Components, Dimensions, ImageData};
 
-use crate::allocator::{Allocator, BufferAllocationError, ImageAllocation, ImageAllocationError};
+use crate::allocator::{Allocator, ImageAllocation, ImageAllocationError, StagingBufferAllocationError};
+use crate::command_pool::RecordedStagingBuffer;
 use crate::device::Device;
 use crate::image::layout_transition::LayoutTransitionError;
 use crate::image::sampler::SamplerCreateError;
@@ -16,14 +17,22 @@ pub struct Texture {
   pub sampler: Sampler,
 }
 
+impl Texture {
+  pub unsafe fn destroy(&self, device: &Device, allocator: &Allocator) {
+    device.destroy_sampler(self.sampler);
+    device.destroy_image_view(self.view);
+    self.allocation.destroy(allocator);
+  }
+}
+
 #[derive(Debug, Error)]
 pub enum AllocateRecordCopyTexturesError {
   #[error("Image data has {0} components, but 4 components are required")]
   IncorrectComponentCount(u8),
-  #[error("Failed to allocate staging buffer")]
-  StagingBufferAllocateFail(#[from] BufferAllocationError),
-  #[error("Failed to allocate image")]
-  ImageAllocateFail(#[from]ImageAllocationError),
+  #[error(transparent)]
+  StagingBufferAllocateFail(#[from] StagingBufferAllocationError),
+  #[error(transparent)]
+  ImageAllocateFail(#[from] ImageAllocationError),
   #[error(transparent)]
   ImageLayoutTransitionFail(#[from] LayoutTransitionError),
   #[error(transparent)]
@@ -39,7 +48,7 @@ impl Device {
     allocator: &Allocator,
     format: Format,
     command_buffer: CommandBuffer,
-  ) -> Result<Vec<Texture>, AllocateRecordCopyTexturesError> {
+  ) -> Result<Vec<RecordedStagingBuffer<Texture>>, AllocateRecordCopyTexturesError> {
     use AllocateRecordCopyTexturesError::*;
     use crate::allocator::{BufferAllocation};
     use vk::{Extent3D, ImageAspectFlags, ImageUsageFlags, ImageLayout};
@@ -54,7 +63,7 @@ impl Device {
       if dimensions.components != Components::Components4 {
         return Err(IncorrectComponentCount(dimensions.components.into()))
       }
-      let staging_buffer = allocator.create_staging_buffer(image_data.size())?;
+      let staging_buffer = allocator.create_staging_from_slice(image_data.data_slice())?;
       let image_info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::TYPE_2D)
         .format(format)
@@ -113,10 +122,10 @@ impl Device {
     )?;
 
     transfers.into_iter().map(|t| {
-      t.staging_buffer.destroy(allocator);
       let view = self.create_image_view(t.image_allocation.image, format, vk::ImageViewType::TYPE_2D, ImageAspectFlags::COLOR, 1)?;
       let sampler = self.create_default_sampler()?;
-      Ok(Texture { allocation: t.image_allocation, view, sampler })
+      let texture = Texture { allocation: t.image_allocation, view, sampler };
+      Ok(RecordedStagingBuffer::new(t.staging_buffer, texture))
     }).collect()
   }
 }

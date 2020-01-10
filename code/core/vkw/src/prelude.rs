@@ -8,10 +8,10 @@ pub use ash::{
     CommandPool, CullModeFlags, DescriptorPool,
     DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding,
     DescriptorType, DeviceSize, DynamicState, Extent2D, Fence, Format,
-    Framebuffer, FrontFace, IndexType, LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint,
-    PipelineCache, PipelineLayout, PipelineShaderStageCreateInfoBuilder, PolygonMode, PresentModeKHR, PrimitiveTopology, RenderPass,
-    SampleCountFlags, Semaphore, ShaderModule, ShaderStageFlags,
-    VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
+    FormatFeatureFlags, Framebuffer, FrontFace, ImageTiling, IndexType, LogicOp, PhysicalDeviceFeatures,
+    Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout, PipelineShaderStageCreateInfoBuilder, PolygonMode, PresentModeKHR,
+    PrimitiveTopology, RenderPass, SampleCountFlags, Semaphore,
+    ShaderModule, ShaderStageFlags, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate,
   },
 };
 pub use vk_mem::{AllocationInfo, MemoryUsage};
@@ -21,6 +21,7 @@ pub use crate::{
   descriptor_set::{self, DescriptorSetUpdateBuilder, WriteDescriptorSetBuilder},
   device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},
   entry::Entry,
+  image::texture::Texture,
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface},
   presenter::Presenter,
   renderer::{Renderer, RenderState},
