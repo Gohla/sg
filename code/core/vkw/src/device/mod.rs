@@ -21,8 +21,9 @@ use ash::{
     DeviceV1_0,
     InstanceV1_0
   },
-  vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, QueueFlags, Result as VkError, Queue},
+  vk::{self, PhysicalDevice as VkPhysicalDevice, PhysicalDeviceFeatures, Queue, QueueFlags, Result as VkError},
 };
+use ash::vk::PhysicalDeviceDescriptorIndexingFeaturesEXT;
 use log::debug;
 use thiserror::Error;
 
@@ -30,6 +31,7 @@ use crate::instance::Instance;
 use crate::instance::surface_extension::Surface;
 
 pub mod swapchain_extension;
+pub mod descriptor_indexing;
 
 // Wrapper
 
@@ -48,17 +50,29 @@ pub struct Device {
 pub struct DeviceFeatures {
   pub enabled_extensions: HashSet<CString>,
   pub enabled_features: PhysicalDeviceFeatures,
+  pub enabled_descriptor_indexing_features: PhysicalDeviceDescriptorIndexingFeaturesEXT
 }
 
 impl DeviceFeatures {
-  fn new(enabled_extensions: HashSet<CString>, enabled_features: PhysicalDeviceFeatures) -> Self {
-    Self { enabled_extensions, enabled_features }
+  fn new(
+    enabled_extensions: HashSet<CString>,
+    enabled_features: PhysicalDeviceFeatures,
+    enabled_descriptor_indexing_features: PhysicalDeviceDescriptorIndexingFeaturesEXT
+  ) -> Self {
+    Self {
+      enabled_extensions,
+      enabled_features,
+      enabled_descriptor_indexing_features
+    }
   }
 
   pub fn is_extension_enabled<B: Borrow<CStr> + ?Sized>(&self, extension_name: &B) -> bool {
     self.enabled_extensions.contains(extension_name.borrow())
   }
 }
+
+// CORRECTNESS: *mut c_void in PhysicalDeviceDescriptorIndexingFeaturesEXT is not used, so it is safe to be Sent.
+unsafe impl Send for DeviceFeatures {}
 
 // Creation and destruction
 
@@ -67,6 +81,7 @@ pub struct DeviceFeaturesQuery {
   wanted_extensions: HashSet<CString>,
   required_extensions: HashSet<CString>,
   required_features: PhysicalDeviceFeatures,
+  descriptor_indexing_features: PhysicalDeviceDescriptorIndexingFeaturesEXT,
 }
 
 impl DeviceFeaturesQuery {
@@ -117,6 +132,7 @@ impl Device {
       wanted_extensions,
       required_extensions,
       required_features,
+      mut descriptor_indexing_features,
     } = features_query;
 
     let physical_devices = unsafe { instance.enumerate_physical_devices() }
@@ -177,17 +193,21 @@ impl Device {
         }
         infos
       };
-      let create_info = DeviceCreateInfo::builder()
+      // Create a copy of descriptor_indexing_features for usage in DeviceFeatures, where the p_next pointer is 0 and unused.
+      let descriptor_indexing_features_copy = descriptor_indexing_features;
+      let mut create_info = DeviceCreateInfo::builder()
         .queue_create_infos(&queue_create_infos)
         .enabled_extension_names(&enabled_extensions_raw)
-        .enabled_features(&required_features);
+        .enabled_features(&required_features)
+        ;
+      create_info = create_info.push_next(&mut descriptor_indexing_features);
       // CORRECTNESS: `queue_priorities` is taken by pointer but is alive until `create_device` is called.
       let device = unsafe { instance.create_device(physical_device, &create_info, None) }
         .map_err(|e| DeviceCreateFail(e))?;
       debug!("Created device {:?}", device.handle());
       let graphics_queue = unsafe { device.get_device_queue(graphics_queue_index, 0) };
       let present_queue = unsafe { device.get_device_queue(present_queue_index, 0) };
-      let features = DeviceFeatures::new(enabled_extensions, required_features);
+      let features = DeviceFeatures::new(enabled_extensions, required_features, descriptor_indexing_features_copy);
       return Ok(Self {
         instance: instance.wrapped.clone(),
         physical_device,

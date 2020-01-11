@@ -3,7 +3,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
-use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass};
+use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass, PhysicalDeviceDescriptorIndexingFeaturesEXT};
 use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
@@ -85,7 +85,14 @@ impl Gfx {
       let features_query = {
         let mut query = DeviceFeaturesQuery::new();
         query.require_swapchain_extension();
-        query.require_features(PhysicalDeviceFeatures::builder().build());
+        query.require_descriptor_indexing_extension();
+        query.require_features(PhysicalDeviceFeatures::builder()
+          .build());
+        query.require_descriptor_indexing_features(PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
+          .shader_sampled_image_array_non_uniform_indexing(true)
+          .descriptor_binding_variable_descriptor_count(true)
+          .runtime_descriptor_array(true)
+          .build());
         query
       };
       Device::new(&instance, features_query, Some(&surface))
