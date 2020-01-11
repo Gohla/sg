@@ -2,9 +2,9 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-#define GRID_LENGTH 16
-#define GRID_COUNT GRID_LENGTH * GRID_LENGTH
-#define GRID_COUNT_DIV_4 16 // No integer division in GLSL: manually calculate.
+#define GRID_LENGTH 8
+#define GRID_COUNT 64
+#define GRID_COUNT_DIV_4 GRID_COUNT / 4
 
 // Inputs
 /// Builtin fragment coordinates
@@ -24,8 +24,8 @@ layout(location = 0) out vec4 outCol;
 void main() {
   vec2 uv = gl_FragCoord.xy / ud.viewport;
   uv *= GRID_LENGTH;
-  uv = fract(uv);
   uvec2 id = uvec2(uv);
-  uint idx = ud.textureIdxs[id.x + id.y][0]; // TODO: fix indexing
+  uv = fract(uv);
+  uint idx = ud.textureIdxs[id.x/4 + id.y*2][id.x%4];
   outCol = texture(textures[idx], uv);
 }

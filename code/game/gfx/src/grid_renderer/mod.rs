@@ -261,10 +261,10 @@ impl VertexData {
 
   pub fn triangle_vertex_data() -> Vec<VertexData> {
     vec![
-      VertexData { pos: Vec2 { x: 0.5, y: -0.5 } },
-      VertexData { pos: Vec2 { x: -0.5, y: 0.5 } },
-      VertexData { pos: Vec2 { x: 0.5, y: 0.5 } },
-      VertexData { pos: Vec2 { x: -0.5, y: -0.5 } },
+      VertexData { pos: Vec2 { x: 1.0, y: -1.0 } },
+      VertexData { pos: Vec2 { x: -1.0, y: 1.0 } },
+      VertexData { pos: Vec2 { x: 1.0, y: 1.0 } },
+      VertexData { pos: Vec2 { x: -1.0, y: -1.0 } },
     ]
   }
 
@@ -316,7 +316,14 @@ impl FragmentUniformData {
   }
 
   pub fn new(width: f32, height: f32) -> Self {
-    Self { texture_ids: [2; 64], viewport: Vec2::new(width, height), }
+    let mut texture_ids = [0; 64];
+    texture_ids[0] = 2;
+    texture_ids[8] = 1;
+    texture_ids[27] = 2;
+    Self {
+      texture_ids,
+      viewport: Vec2::new(width, height),
+    }
   }
 }
 
