@@ -208,23 +208,34 @@ pub struct MappedMemory<'a> {
 }
 
 impl MappedMemory<'_> {
-  pub unsafe fn copy_from_slice<T>(&self, src: &[T]) {
-    self.copy_from(src.as_ptr(), src.len());
+  #[inline]
+  pub unsafe fn copy_from<T>(&self, src: &T) {
+    let src = src as *const T;
+    self.copy_from_ptr(src, 1);
   }
 
-  pub unsafe fn copy_from<T>(&self, src: *const T, count: usize) {
+  #[inline]
+  pub unsafe fn copy_from_slice<T>(&self, src: &[T]) {
+    self.copy_from_ptr(src.as_ptr(), src.len());
+  }
+
+  #[inline]
+  pub unsafe fn copy_from_ptr<T>(&self, src: *const T, count: usize) {
     let dst = self.ptr as *mut T;
     std::ptr::copy_nonoverlapping(src, dst, count);
   }
 
+  #[inline]
   pub unsafe fn copy_from_bytes_slice(&self, src: &[u8]) {
-    self.copy_from(src.as_ptr(), src.len());
+    self.copy_from_ptr(src.as_ptr(), src.len());
   }
 
-  pub unsafe fn copy_from_bytes(&self, src: *const u8, count: usize) {
+  #[inline]
+  pub unsafe fn copy_from_bytes_ptr(&self, src: *const u8, count: usize) {
     std::ptr::copy_nonoverlapping(src, self.ptr, count);
   }
 
+  #[inline]
   pub unsafe fn unmap(self) { /* Just drops self */ }
 }
 

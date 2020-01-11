@@ -17,6 +17,7 @@ pub mod shader;
 pub mod graphics_pipeline;
 pub mod allocator;
 pub mod descriptor_set;
+pub mod push_constant;
 
 pub mod renderer;
 pub mod presenter;

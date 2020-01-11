@@ -3,7 +3,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
-use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass, PhysicalDeviceDescriptorIndexingFeaturesEXT};
+use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PhysicalDeviceDescriptorIndexingFeaturesEXT, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
@@ -175,7 +175,7 @@ impl Gfx {
       unsafe { builder.build(&device, &allocator, transient_command_pool) }?
     };
 
-    let grid_render_sys = GridRendererSys::new(&device, &allocator, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
+    let grid_render_sys = GridRendererSys::new(&device, &allocator, &texture_def, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
       .with_context(|| "Failed to create triangle renderer")?;
 
     let renderer = Renderer::new(&device, max_frames_in_flight, |state| {
@@ -238,7 +238,7 @@ impl Gfx {
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
 
-      self.grid_render_sys.render(&self.device, command_buffer, &game_render_state.grid_render_sys);
+      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, extent, command_buffer);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);

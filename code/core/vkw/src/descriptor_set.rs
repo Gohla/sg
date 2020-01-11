@@ -1,5 +1,9 @@
 use ash::version::DeviceV1_0;
-use ash::vk::{self, Buffer, BufferView, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool, DescriptorPoolSize, DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorType, DeviceSize, ImageLayout, ImageView, Result as VkError, Sampler, ShaderStageFlags, WriteDescriptorSet};
+use ash::vk::{
+  self, Buffer, BufferView, DescriptorBindingFlagsEXT, DescriptorBufferInfo, DescriptorImageInfo, DescriptorPool,
+  DescriptorPoolSize, DescriptorSet, DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorType, DeviceSize,
+  ImageLayout, ImageView, Result as VkError, Sampler, ShaderStageFlags, WriteDescriptorSet
+};
 use log::debug;
 use thiserror::Error;
 
@@ -40,9 +44,17 @@ pub fn sampler_layout_binding(binding: u32, count: u32) -> DescriptorSetLayoutBi
 pub struct DescriptorSetLayoutCreateError(#[from] VkError);
 
 impl Device {
-  pub unsafe fn create_descriptor_set_layout(&self, bindings: &[DescriptorSetLayoutBinding]) -> Result<DescriptorSetLayout, DescriptorSetLayoutCreateError> {
+  pub unsafe fn create_descriptor_set_layout(
+    &self,
+    bindings: &[DescriptorSetLayoutBinding],
+    flags: &[DescriptorBindingFlagsEXT]
+  ) -> Result<DescriptorSetLayout, DescriptorSetLayoutCreateError> {
+    let mut ext = vk::DescriptorSetLayoutBindingFlagsCreateInfoEXT::builder()
+      .binding_flags(flags)
+      .build();
     let create_info = vk::DescriptorSetLayoutCreateInfo::builder()
       .bindings(bindings)
+      .push_next(&mut ext)
       ;
     let descriptor_set_layout = self.wrapped.create_descriptor_set_layout(&create_info, None)?;
     debug!("Created descriptor set layout {:?}", descriptor_set_layout);
@@ -188,7 +200,20 @@ pub struct WriteDescriptorSetBuilder {
 }
 
 impl WriteDescriptorSetBuilder {
-  pub fn new() -> Self { Self::default() }
+  pub fn new(
+    dst_set: DescriptorSet,
+    dst_binding: u32,
+    dst_array_element: u32,
+    descriptor_type: DescriptorType
+  ) -> Self {
+    Self {
+      dst_set,
+      dst_binding,
+      dst_array_element,
+      descriptor_type,
+      ..Self::default()
+    }
+  }
 
   pub fn new_buffer_write(
     dst_set: DescriptorSet,
