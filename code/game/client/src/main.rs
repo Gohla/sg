@@ -18,9 +18,10 @@ use crate::timing::{FrameTime, FrameTimer, TickTimer};
 pub mod timing;
 
 fn main() -> Result<()> {
+  // Initialize logger.
   simple_logger::init_with_level(log::Level::Debug)
     .with_context(|| "Failed to initialize logger")?;
-
+  // OS context, window, and event handling.
   let mut os_context = OsContext::new();
   let window = {
     let window_min_size = LogicalSize::new(800.0, 600.0);
@@ -32,29 +33,27 @@ fn main() -> Result<()> {
     let input_sys = OsInputSys::new(input_event_rx);
     (event_sys, input_sys, event_rx)
   };
-
+  // Initialize simulation.
+  let sim = Sim::new();
+  // Initialize graphics.
   let gfx = Gfx::new(
     cfg!(debug_assertions),
     NonZeroU32::new(2).unwrap(),
     window.winit_raw_window_handle(),
     window.window_inner_size()
   ).with_context(|| "Failed to create GFX instance")?;
-
-  let run_thread = thread::spawn(move || run(window, os_input_sys, os_event_rx, gfx));
+  // Spawn game thread and run OS event loop.
+  let game_thread = thread::spawn(move || run(window, os_input_sys, os_event_rx, sim, gfx));
   os_event_sys.run_return(&mut os_context);
-  run_thread.join()
-    .unwrap_or_else(|e| panic!("Run thread paniced: {:?}", e))
-    .with_context(|| "Run thread stopped with an error")?;
-
+  game_thread.join()
+    .unwrap_or_else(|e| panic!("Game thread paniced: {:?}", e))
+    .with_context(|| "Game thread stopped with an error")?;
   Ok(())
 }
 
-fn run(_window: Window, _os_input_sys: OsInputSys, os_event_rx: Receiver<OsEvent>, mut gfx: Gfx) -> Result<()> {
-  let mut sim = Sim::new();
-
+fn run(_window: Window, _os_input_sys: OsInputSys, os_event_rx: Receiver<OsEvent>, mut sim: Sim, mut gfx: Gfx) -> Result<()> {
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
-
   'main: loop {
     // Timing
     let FrameTime { frame_time, .. } = frame_timer.frame();
