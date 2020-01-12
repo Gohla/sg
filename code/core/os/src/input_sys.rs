@@ -3,6 +3,8 @@ use std::sync::mpsc::Receiver;
 
 use winit::event::{ElementState as WinitElementState, KeyboardInput, VirtualKeyCode};
 
+use math::screen::{PhysicalDelta, PhysicalPosition};
+
 use crate::event_sys::{ElementState, MouseButton, OsInputEvent};
 
 pub struct OsInputSys {
@@ -37,9 +39,8 @@ impl OsInputSys {
             _ => {}
           };
         }
-        OsInputEvent::MouseMoved(screen_size) => {
-          let (x, y) = screen_size.logical.into();
-          input_state.mouse_pos = MousePos::new(x, y);
+        OsInputEvent::MouseMoved(position) => {
+          input_state.mouse_pos = position;
         }
         OsInputEvent::MouseWheelMoved { x_delta, y_delta } => {
           input_state.mouse_wheel_delta.x += x_delta;
@@ -65,10 +66,9 @@ impl OsInputSys {
       }
     }
 
-
     input_state.mouse_pos_delta = match self.prev_state {
-      Some(ref prev_state) => MouseDelta::new(input_state.mouse_pos.x - prev_state.mouse_pos.x, input_state.mouse_pos.y - prev_state.mouse_pos.y),
-      None => MouseDelta::default(),
+      Some(ref prev_state) => PhysicalDelta::new(input_state.mouse_pos.x - prev_state.mouse_pos.x, input_state.mouse_pos.y - prev_state.mouse_pos.y),
+      None => PhysicalDelta::default(),
     };
 
     self.prev_state = Some(input_state.clone());
@@ -80,9 +80,9 @@ impl OsInputSys {
 #[derive(Clone, Debug, Default)]
 pub struct RawInput {
   pub mouse_buttons: MouseButtons,
-  pub mouse_pos: MousePos,
-  pub mouse_pos_delta: MouseDelta,
-  pub mouse_wheel_delta: MouseDelta,
+  pub mouse_pos: PhysicalPosition,
+  pub mouse_pos_delta: PhysicalDelta,
+  pub mouse_wheel_delta: MouseWheelDelta,
   pub keyboard_buttons: HashSet<VirtualKeyCode>,
   pub keyboard_buttons_pressed: HashSet<VirtualKeyCode>,
   pub keyboard_buttons_released: HashSet<VirtualKeyCode>,
@@ -105,10 +105,8 @@ impl RawInput {
     self.mouse_buttons.left = false;
     self.mouse_buttons.right = false;
     self.mouse_buttons.middle = false;
-    self.mouse_pos_delta.x = 0.0;
-    self.mouse_pos_delta.y = 0.0;
-    self.mouse_wheel_delta.x = 0.0;
-    self.mouse_wheel_delta.y = 0.0;
+    self.mouse_pos_delta = PhysicalDelta::default();
+    self.mouse_wheel_delta = MouseWheelDelta::default();
   }
 
   pub fn remove_keyboard_input(&mut self) {
@@ -120,8 +118,8 @@ impl RawInput {
 
 
   fn clear_deltas(&mut self) {
-    self.mouse_pos_delta = MouseDelta::default();
-    self.mouse_wheel_delta = MouseDelta::default();
+    self.mouse_pos_delta = PhysicalDelta::default();
+    self.mouse_wheel_delta = MouseWheelDelta::default();
     self.keyboard_buttons_pressed.clear();
     self.keyboard_buttons_released.clear();
     self.characters.clear();
@@ -136,24 +134,12 @@ pub struct MouseButtons {
   pub middle: bool,
 }
 
-
 #[derive(Clone, Copy, Debug, Default)]
-pub struct MousePos {
+pub struct MouseWheelDelta {
   pub x: f64,
   pub y: f64,
 }
 
-impl MousePos {
-  pub fn new(x: f64, y: f64) -> MousePos { MousePos { x, y } }
-}
-
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MouseDelta {
-  pub x: f64,
-  pub y: f64,
-}
-
-impl MouseDelta {
-  pub fn new(x: f64, y: f64) -> MouseDelta { MouseDelta { x, y } }
+impl MouseWheelDelta {
+  pub fn new(x: f64, y: f64) -> MouseWheelDelta { MouseWheelDelta { x, y } }
 }

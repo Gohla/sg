@@ -8,7 +8,7 @@
 
 // Inputs
 /// Builtin fragment coordinates
-in vec4 gl_FragCoord;
+layout(location = 0) in vec2 tex;
 /// Dynamic inform data
 layout(set = 0, binding = 0) uniform sampler2D textures[];
 layout(std140, set = 1, binding = 0) uniform FragmentUniformData {
@@ -22,7 +22,7 @@ layout(std140, set = 1, binding = 0) uniform FragmentUniformData {
 layout(location = 0) out vec4 outCol;
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / ud.viewport;
+  vec2 uv = tex;
   uv *= GRID_LENGTH;
   uvec2 id = uvec2(uv);
   uv = fract(uv);

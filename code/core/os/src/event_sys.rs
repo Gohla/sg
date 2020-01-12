@@ -6,7 +6,7 @@ use winit::event_loop::ControlFlow;
 use winit::platform::desktop::EventLoopExtDesktop;
 use winit::window::WindowId;
 
-use math::screen::{PhysicalSize, Scale, ScreenPosition, ScreenSize};
+use math::screen::{PhysicalPosition, PhysicalSize, Scale, ScreenSize};
 
 use crate::context::OsContext;
 use crate::screen_ext::*;
@@ -24,7 +24,7 @@ pub struct OsEventSys {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum OsInputEvent {
   MouseInput { button: MouseButton, state: ElementState },
-  MouseMoved(ScreenPosition),
+  MouseMoved(PhysicalPosition),
   // TODO: distinguish line and pixel delta.
   MouseWheelMoved { x_delta: f64, y_delta: f64 },
   // TODO: this contains a winit item, but it's pretty big to copy...
@@ -109,8 +109,7 @@ impl OsEventSys {
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::CursorMoved { position, .. } => {
-            let screen_position = ScreenPosition::from_physical_scale(position.into_util(), self.scale_factor);
-            self.input_event_tx.send(OsInputEvent::MouseMoved(screen_position))
+            self.input_event_tx.send(OsInputEvent::MouseMoved(position.into_util()))
               .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::MouseWheel { delta, .. } => {
@@ -149,6 +148,7 @@ impl OsEventSys {
           WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
             let scale_factor = scale_factor.into();
             self.scale_factor = scale_factor;
+
             if !self.first_resize {
               let screen_size = ScreenSize::from_physical_scale(self.inner_size, scale_factor);
               self.os_event_tx.send(OsEvent::WindowResized(screen_size))

@@ -76,7 +76,7 @@ impl GridRendererSys {
           .depth_clamp_enable(false)
           .rasterizer_discard_enable(false)
           .polygon_mode(PolygonMode::FILL)
-          .cull_mode(CullModeFlags::BACK)
+          .cull_mode(CullModeFlags::NONE)
           .front_face(FrontFace::COUNTER_CLOCKWISE)
           .line_width(1.0)
           ;
@@ -119,9 +119,9 @@ impl GridRendererSys {
         device.create_graphics_pipeline(pipeline_cache, &create_info)?
       };
 
-      let vertex_data = VertexData::triangle_vertex_data();
+      let vertex_data = VertexData::quad_vertex_data();
       let vertex_data_size = size_of::<VertexData>() * vertex_data.len();
-      let index_data = VertexData::triangle_index_data();
+      let index_data = VertexData::quad_index_data();
       let index_data_size = size_of::<u16>() * index_data.len();
 
       let vertex_staging = allocator.create_staging_buffer(vertex_data_size)?;
@@ -186,8 +186,8 @@ impl GridRendererSys {
     }
   }
 
-  pub fn render(&self, device: &Device, texture_def: &TextureDef, render_state: &GridRenderState, viewport: Extent2D, command_buffer: CommandBuffer) {
-    let vertex_uniform_data = VertexUniformData { mvp: Mat4::identity() };
+  pub fn render(&self, device: &Device, texture_def: &TextureDef, render_state: &GridRenderState, view_projection: Mat4, viewport: Extent2D, command_buffer: CommandBuffer) {
+    let vertex_uniform_data = VertexUniformData { mvp: view_projection };
     let fragment_uniform_data = FragmentUniformData::new(viewport.width as f32, viewport.height as f32);
     unsafe {
       render_state.uniform_buffer.get_mapped_data().unwrap(/* CORRECTNESS: buffer is persistently mapped */).copy_from(&fragment_uniform_data);
@@ -235,6 +235,7 @@ impl GridRenderState {
 #[repr(C)]
 struct VertexData {
   pos: Vec2,
+  tex: Vec2,
 }
 
 impl VertexData {
@@ -256,20 +257,30 @@ impl VertexData {
         .format(Format::R32G32_SFLOAT)
         .offset(0)
         .build(),
+      VertexInputAttributeDescription::builder()
+        .location(1)
+        .binding(0)
+        .format(Format::R32G32_SFLOAT)
+        .offset(size_of::<Vec2>() as u32)
+        .build(),
     ]
   }
 
-  pub fn triangle_vertex_data() -> Vec<VertexData> {
+  pub fn new(x: f32, y: f32, u: f32, v: f32) -> Self {
+    Self { pos: Vec2::new(x, y), tex: Vec2::new(u, v) }
+  }
+
+  pub fn quad_vertex_data() -> Vec<Self> {
     vec![
-      VertexData { pos: Vec2 { x: 1.0, y: -1.0 } },
-      VertexData { pos: Vec2 { x: -1.0, y: 1.0 } },
-      VertexData { pos: Vec2 { x: 1.0, y: 1.0 } },
-      VertexData { pos: Vec2 { x: -1.0, y: -1.0 } },
+      VertexData::new(-16.0, -16.0, 0.0, 1.0),
+      VertexData::new(16.0, -16.0, 1.0, 1.0),
+      VertexData::new(-16.0, 16.0, 0.0, 0.0),
+      VertexData::new(16.0, 16.0, 1.0, 0.0),
     ]
   }
 
-  pub fn triangle_index_data() -> Vec<u16> {
-    vec![0, 1, 2, 0, 3, 1]
+  pub fn quad_index_data() -> Vec<u16> {
+    vec![0, 1, 2, 1, 3, 2]
   }
 }
 

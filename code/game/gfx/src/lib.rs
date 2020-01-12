@@ -10,15 +10,17 @@ use raw_window_handle::RawWindowHandle;
 
 use math::prelude::*;
 use util::image::{Components, ImageData};
+use util::timing::Duration;
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
 
+use crate::camera::{CameraInput, CameraSys};
 use crate::grid_renderer::{GridRendererSys, GridRenderState};
 use crate::texture_def::{TextureDef, TextureDefBuilder};
 
 pub mod grid_renderer;
 pub mod texture_def;
-//pub mod camera;
+pub mod camera;
 
 pub struct Gfx {
   pub instance: Instance,
@@ -35,6 +37,7 @@ pub struct Gfx {
 
   pub texture_def: TextureDef,
 
+  pub camera_sys: CameraSys,
   pub grid_render_sys: GridRendererSys,
 
   pub renderer: Renderer<GameRenderState>,
@@ -177,6 +180,7 @@ impl Gfx {
       unsafe { builder.build(&device, &allocator, transient_command_pool) }?
     };
 
+    let camera_sys = CameraSys::new(initial_screen_size.physical);
     let grid_render_sys = GridRendererSys::new(&device, &allocator, &texture_def, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
       .with_context(|| "Failed to create triangle renderer")?;
 
@@ -202,13 +206,19 @@ impl Gfx {
 
       texture_def,
 
+      camera_sys,
       grid_render_sys,
 
       renderer,
     })
   }
 
-  pub fn render_frame(&mut self, _extrapolation: f64) -> Result<()> {
+  pub fn render_frame(
+    &mut self,
+    camera_input: CameraInput,
+    _extrapolation: f64,
+    frame_time: Duration
+  ) -> Result<()> {
     // Recreate surface-extent dependent items if needed.
     if let Some(extent) = self.surface_change_handler.query_surface_change(self.swapchain.extent) {
       unsafe {
@@ -223,6 +233,9 @@ impl Gfx {
       }
     }
     let extent = self.swapchain.extent;
+
+    // Update camera
+    self.camera_sys.update(camera_input, frame_time);
 
     // Acquire render state.
     let (render_state, game_render_state) = self.renderer.next_render_state(&self.device)
@@ -240,7 +253,7 @@ impl Gfx {
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
 
-      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, extent, command_buffer);
+      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, self.camera_sys.view_projection_matrix(), extent, command_buffer);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);
@@ -269,6 +282,7 @@ impl Gfx {
   }
 
   pub fn screen_size_changed(&mut self, screen_size: ScreenSize) {
+    self.camera_sys.signal_viewport_resize(screen_size.physical);
     let (width, height) = screen_size.physical.into();
     self.surface_change_handler.signal_screen_resize(Extent2D { width, height });
   }

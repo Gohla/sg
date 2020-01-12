@@ -86,8 +86,8 @@ impl Default for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalSize {
-  width: u32,
-  height: u32,
+  pub width: u32,
+  pub height: u32,
 }
 
 impl PhysicalSize {
@@ -103,12 +103,6 @@ impl PhysicalSize {
     let scale = scale.into();
     LogicalSize::new(self.width / scale, self.height / scale)
   }
-
-  #[inline]
-  pub fn width(&self) -> u32 { self.width }
-
-  #[inline]
-  pub fn height(&self) -> u32 { self.height }
 }
 
 impl From<(u64, u64)> for PhysicalSize {
@@ -131,13 +125,24 @@ impl From<PhysicalSize> for (u32, u32) {
   fn from(physical_size: PhysicalSize) -> Self { (physical_size.width, physical_size.height) }
 }
 
+impl From<PhysicalSize> for (f64, f64) {
+  #[inline]
+  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width as _, physical_size.height as _) }
+}
+
+impl From<PhysicalSize> for (f32, f32) {
+  #[inline]
+  fn from(physical_size: PhysicalSize) -> Self { (physical_size.width as _, physical_size.height as _) }
+}
+
 
 // Logical size: size after scaling. That is, the physical size divided by the scale factor.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub struct LogicalSize {
-  width: f64,
-  height: f64,
+  pub width: f64,
+  pub height: f64,
+  _private: () // Make construction private, use Self::new.
 }
 
 impl LogicalSize {
@@ -149,7 +154,7 @@ impl LogicalSize {
     debug_assert!(height.is_sign_positive(), "Height {} is not positive", height);
     debug_assert!(height.is_finite(), "Height {} is not finite", height);
     debug_assert!(!height.is_nan(), "Height is NaN");
-    Self { width, height }
+    Self { width, height, _private: () }
   }
 
   #[inline]
@@ -161,12 +166,6 @@ impl LogicalSize {
     let scale = scale.into();
     PhysicalSize::new((self.width * scale).round() as u32, (self.height * scale).round() as u32)
   }
-
-  #[inline]
-  pub fn width(&self) -> f64 { self.width }
-
-  #[inline]
-  pub fn height(&self) -> f64 { self.height }
 }
 
 impl From<(f64, f64)> for LogicalSize {
@@ -258,8 +257,8 @@ impl From<ScreenSize> for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalPosition {
-  x: i32,
-  y: i32,
+  pub x: i32,
+  pub y: i32,
 }
 
 impl PhysicalPosition {
@@ -275,12 +274,6 @@ impl PhysicalPosition {
     let scale = scale.into();
     LogicalPosition::new(self.x / scale, self.y / scale)
   }
-
-  #[inline]
-  pub fn x(&self) -> i32 { self.x }
-
-  #[inline]
-  pub fn y(&self) -> i32 { self.y }
 }
 
 impl From<(i64, i64)> for PhysicalPosition {
@@ -303,13 +296,23 @@ impl From<PhysicalPosition> for (i32, i32) {
   fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x, physical_position.y) }
 }
 
+impl From<PhysicalPosition> for (f64, f64) {
+  #[inline]
+  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x as _, physical_position.y as _) }
+}
+
+impl From<PhysicalPosition> for (f32, f32) {
+  #[inline]
+  fn from(physical_position: PhysicalPosition) -> Self { (physical_position.x as _, physical_position.y as _) }
+}
 
 // Position in logical screen space.
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub struct LogicalPosition {
-  x: f64,
-  y: f64,
+  pub x: f64,
+  pub y: f64,
+  _private: () // Make construction private, use Self::new.
 }
 
 impl LogicalPosition {
@@ -319,7 +322,7 @@ impl LogicalPosition {
     debug_assert!(!x.is_nan(), "X {} is NaN", x);
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
-    Self { x, y }
+    Self { x, y, _private: () }
   }
 
   #[inline]
@@ -331,12 +334,6 @@ impl LogicalPosition {
     let scale = scale.into();
     PhysicalPosition::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
-
-  #[inline]
-  pub fn x(&self) -> f64 { self.x }
-
-  #[inline]
-  pub fn y(&self) -> f64 { self.y }
 }
 
 impl From<(f64, f64)> for LogicalPosition {
@@ -423,8 +420,8 @@ impl From<ScreenPosition> for Scale {
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct PhysicalDelta {
-  x: i32,
-  y: i32,
+  pub x: i32,
+  pub y: i32,
 }
 
 impl PhysicalDelta {
@@ -440,12 +437,6 @@ impl PhysicalDelta {
     let scale = scale.into();
     LogicalDelta::new(self.x / scale, self.y / scale)
   }
-
-  #[inline]
-  pub fn x(&self) -> i32 { self.x }
-
-  #[inline]
-  pub fn y(&self) -> i32 { self.y }
 }
 
 impl From<(i64, i64)> for PhysicalDelta {
@@ -473,8 +464,9 @@ impl From<PhysicalDelta> for (i32, i32) {
 
 #[derive(Default, Copy, Clone, PartialOrd, PartialEq, Debug)]
 pub struct LogicalDelta {
-  x: f64,
-  y: f64,
+  pub x: f64,
+  pub y: f64,
+  _private: () // Make construction private, use Self::new.
 }
 
 impl LogicalDelta {
@@ -484,7 +476,7 @@ impl LogicalDelta {
     debug_assert!(!x.is_nan(), "X {} is NaN", x);
     debug_assert!(y.is_finite(), "Y {} is not finite", y);
     debug_assert!(!y.is_nan(), "Y {} is NaN", y);
-    Self { x, y }
+    Self { x, y, _private: () }
   }
 
   #[inline]
@@ -496,12 +488,6 @@ impl LogicalDelta {
     let scale = scale.into();
     PhysicalDelta::new((self.x * scale).round() as _, (self.y * scale).round() as _)
   }
-
-  #[inline]
-  pub fn x(&self) -> f64 { self.x }
-
-  #[inline]
-  pub fn y(&self) -> f64 { self.y }
 }
 
 impl From<(f64, f64)> for LogicalDelta {

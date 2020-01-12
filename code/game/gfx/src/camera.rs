@@ -1,35 +1,47 @@
 use ultraviolet::{Mat4, Vec2, Vec3};
+use ultraviolet::projection::lh_yup::orthographic_vk;
 
-use util::screen_size::LogicalSize;
+use math::screen::{PhysicalPosition, PhysicalSize};
 use util::timing::Duration;
 
+#[derive(Debug)]
 pub struct CameraSys {
-  position: Vec2,
+  position: Vec3,
   zoom: f32,
   pan_speed: f32,
   mag_speed: f32,
   view_proj: Mat4,
-  viewport: LogicalSize,
+  view_proj_inverse: Mat4,
+  viewport: PhysicalSize,
   last_mouse_pos: Option<Vec2>,
 }
 
 impl CameraSys {
-  pub fn new(viewport: LogicalSize) -> CameraSys {
+  pub fn new(viewport: PhysicalSize) -> CameraSys {
     CameraSys::with_speeds(viewport, 50.0, 0.05)
   }
 
-  pub fn with_speeds(viewport: LogicalSize, pan_speed: f32, mag_speed: f32) -> CameraSys {
-    CameraSys { position: Vec2::new(0.0, 0.0), zoom: 1.0, pan_speed, mag_speed, view_proj: Mat4::identity(), viewport, last_mouse_pos: None }
+  pub fn with_speeds(viewport: PhysicalSize, pan_speed: f32, mag_speed: f32) -> CameraSys {
+    CameraSys {
+      position: Vec3::zero(),
+      zoom: 1.0,
+      pan_speed,
+      mag_speed,
+      view_proj: Mat4::identity(),
+      view_proj_inverse: Mat4::identity().inversed(),
+      viewport,
+      last_mouse_pos: None
+    }
   }
 
   #[inline]
-  pub fn position(&self) -> Vec2 { self.position }
+  pub fn position(&self) -> Vec3 { self.position }
 
   #[inline]
   pub fn zoom(&self) -> f32 { self.zoom }
 
   #[inline]
-  pub fn set_position(&mut self, position: Vec2) { self.position = position; }
+  pub fn set_position(&mut self, position: Vec3) { self.position = position; }
 
   #[inline]
   pub fn set_zoom(&mut self, zoom: f32) { self.zoom = zoom; }
@@ -40,23 +52,19 @@ impl CameraSys {
   /// Converts screen coordinates (in pixels, relative to the top-left of the screen) to view coordinates (in meters,
   /// relative to the center of the screen).
   #[inline]
-  pub fn screen_to_view(&self, vector: Vec2) -> Vec3 {
-    if let Some(view_proj_inverted) = self.view_proj.inverse_transform() {
-      let (width, height): (f32, f32) = self.viewport.into();
-      let x = 2.0 * vector.x / width - 1.0;
-      let y = 2.0 * vector.y / height - 1.0;
-      let vector = Vec3::new(x, y, 0.0);
-      view_proj_inverted.transform_vector(vector)
-    } else {
-      Vec3::new(0.0, 0.0, 0.0)
-    }
+  pub fn screen_to_view(&self, x: f32, y:f32) -> Vec3 {
+    let (width, height): (f32, f32) = self.viewport.into();
+    let x = 2.0 * x / width - 1.0;
+    let y = 2.0 * y / height - 1.0;
+    let vec = Vec3::new(x, y, 0.0);
+    Vec3::from_homogeneous_point(self.view_proj_inverse * vec.into_homogeneous_point())
   }
 
-  /// Converts screen coordinates (in pixels, relative to the top-left of the screen)
-  /// to world coordinates (in meters, absolute).
+  /// Converts screen coordinates (in pixels, relative to the top-left of the screen) to world coordinates (in meters,
+  /// absolute).
   #[inline]
-  pub fn screen_to_world(&self, vector: Vec2) -> Vec3 {
-    self.position.to_vec().extend(0.0) + self.screen_to_view(vector)
+  pub fn screen_to_world(&self, x: f32, y:f32) -> Vec3 {
+    self.position + self.screen_to_view(x, y)
   }
 
 
@@ -69,13 +77,13 @@ impl CameraSys {
   pub fn set_magnification_speed(&mut self, mag_speed: f32) { self.mag_speed = mag_speed; }
 
 
-  pub(crate) fn signal_viewport_resize(&mut self, viewport: LogicalSize) {
+  pub(crate) fn signal_viewport_resize(&mut self, viewport: PhysicalSize) {
     self.viewport = viewport;
   }
 
   pub(crate) fn update(
     &mut self,
-    input: &CameraInput,
+    input: CameraInput,
     frame_time: Duration,
   ) {
     let pan_speed = self.pan_speed * frame_time.as_s() as f32;
@@ -91,11 +99,11 @@ impl CameraSys {
     if input.drag {
       // Move the camera
       let mouse_pos = Vec2::new(input.drag_pos.x as f32, input.drag_pos.y as f32);
-      if self.last_mouse_pos == None {
+      if self.last_mouse_pos.is_none() {
         self.last_mouse_pos = Some(mouse_pos);
       }
       let mouse_delta = Vec2::new(width / 2.0, height / 2.0) + (mouse_pos - self.last_mouse_pos.unwrap());
-      self.position -= self.screen_to_view(mouse_delta).truncate();
+      self.position -= self.screen_to_view(mouse_delta.x, mouse_delta.y);
       self.last_mouse_pos = Some(mouse_pos);
     } else {
       self.last_mouse_pos = None;
@@ -128,7 +136,7 @@ impl CameraSys {
       let max_y = self.zoom / 2.0;
       let min_z = 0.01f32;
       let max_z = 1000.0f32;
-      cgmath::ortho(min_x, max_x,
+      orthographic_vk(min_x, max_x,
         min_y, max_y,
         min_z, max_z)
     };
@@ -140,8 +148,11 @@ impl CameraSys {
       0.0, 0.0, 0.5, 0.0,
       0.0, 0.0, 0.5, 1.0,
     ]);
+
     let view_proj = clip * proj * view;
+
     self.view_proj = view_proj;
+    self.view_proj_inverse = view_proj.inversed();
   }
 }
 
@@ -156,5 +167,5 @@ pub struct CameraInput {
   pub zoom_delta: f32,
   // Mouse dragging.
   pub drag: bool,
-  pub drag_pos: MousePos,
+  pub drag_pos: PhysicalPosition,
 }
