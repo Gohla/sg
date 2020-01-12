@@ -1,0 +1,13 @@
+[package]
+name = "os"
+version = "0.1.0"
+authors = ["Gabriel Konat <gabrielkonat@gmail.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+math = {path = "../math"}
+winit = "0.20"
+raw-window-handle = "0.3"
+thiserror = "1.0"
+log = "0.4"

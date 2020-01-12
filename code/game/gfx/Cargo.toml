@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 vkw = {path = "../../core/vkw"}
+math = {path = "../../core/math"}
 util = {path = "../../core/util"}
 ash = "0.29"
 vk-mem = "0.2"

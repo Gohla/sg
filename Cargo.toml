@@ -6,6 +6,8 @@ members = [
   "code/game/gfx",
   "code/game/client",
   "code/core/vkw",
+  "code/core/math",
+  "code/core/os",
   "code/core/util",
 ]
 
@@ -29,6 +31,10 @@ opt-level = 2
 [profile.dev.overrides."client"]
 opt-level = 2
 [profile.dev.overrides."vkw"]
+opt-level = 2
+[profile.dev.overrides."math"]
+opt-level = 2
+[profile.dev.overrides."os"]
 opt-level = 2
 [profile.dev.overrides."util"]
 opt-level = 2

@@ -8,6 +8,7 @@ use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
 
+use math::prelude::*;
 use util::image::{Components, ImageData};
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
@@ -17,6 +18,7 @@ use crate::texture_def::{TextureDef, TextureDefBuilder};
 
 pub mod grid_renderer;
 pub mod texture_def;
+//pub mod camera;
 
 pub struct Gfx {
   pub instance: Instance,
@@ -44,11 +46,11 @@ pub struct GameRenderState {
 }
 
 impl Gfx {
-  pub fn new<S: Into<(u32, u32)>>(
+  pub fn new(
     require_validation_layer: bool,
     max_frames_in_flight: NonZeroU32,
     window: RawWindowHandle,
-    surface_size: S
+    initial_screen_size: ScreenSize
   ) -> Result<Gfx> {
     let entry = Entry::new()
       .with_context(|| "Failed to create VKW entry")?;
@@ -118,7 +120,7 @@ impl Gfx {
         ]);
         query
       };
-      let (width, height) = surface_size.into();
+      let (width, height) = initial_screen_size.physical.into();
       Swapchain::new(&instance, &device, &surface, features_query, Extent2D { width, height })
         .with_context(|| "Failed to create VKW swapchain")?
     };
@@ -266,9 +268,9 @@ impl Gfx {
     Ok(unsafe { self.device.device_wait_idle() }.with_context(|| "Failed to wait for device idle")?)
   }
 
-  pub fn surface_size_changed<S: Into<(u32, u32)>>(&mut self, surface_size: S) {
-    let (width, height) = surface_size.into();
-    self.surface_change_handler.signal_surface_resize(Extent2D { width, height });
+  pub fn screen_size_changed(&mut self, screen_size: ScreenSize) {
+    let (width, height) = screen_size.physical.into();
+    self.surface_change_handler.signal_screen_resize(Extent2D { width, height });
   }
 
 
