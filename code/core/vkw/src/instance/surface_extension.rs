@@ -35,7 +35,7 @@ pub enum SurfaceCreateError {
   #[error("Got a window handle that does not match with the current platform")]
   WindowHandleMismatch,
   #[error("Failed to create surface: {0:?}")]
-  SurfaceCreateFail(#[source] VkError)
+  SurfaceCreateFail(#[source] VkError),
 }
 
 impl Surface {
@@ -54,9 +54,9 @@ impl Surface {
 
   fn create_surface(instance: &Instance, window: RawWindowHandle) -> Result<SurfaceKHR, SurfaceCreateError> {
     use SurfaceCreateError::*;
-    use std::os::raw::c_void;
 
     #[cfg(target_os = "windows")] {
+      use std::os::raw::c_void;
       use ash::extensions::khr::Win32Surface;
 
       if let RawWindowHandle::Windows(handle) = window {
@@ -73,7 +73,40 @@ impl Surface {
       }
     }
 
-    // TODO: support macOS
+    #[cfg(target_os = "macos")] {
+      use std::mem;
+      use ash::extensions::mvk::MacOSSurface;
+      use cocoa::appkit::{NSView, NSWindow};
+      use cocoa::base::id;
+      use metal::CoreAnimationLayer;
+      use objc::runtime::YES;
+
+      if let RawWindowHandle::MacOS(handle) = window {
+        let layer = CoreAnimationLayer::new();
+        layer.set_edge_antialiasing_mask(0);
+        layer.set_presents_with_transaction(false);
+        layer.remove_all_animations();
+
+        unsafe {
+          let wnd: id = mem::transmute(handle.ns_window);
+          let view = wnd.contentView();
+          layer.set_contents_scale(view.backingScaleFactor());
+          view.setLayer(mem::transmute(layer.as_ref()));
+          view.setWantsLayer(YES);
+        }
+
+        let create_info = vk::MacOSSurfaceCreateInfoMVK::builder()
+          .view(unsafe { handle.ns_view.as_ref() }.unwrap())
+          ;
+        let loader = MacOSSurface::new(&instance.entry.wrapped, &instance.wrapped);
+        let surface = unsafe { loader.create_mac_os_surface_mvk(&create_info, None) }
+          .map_err(|e| SurfaceCreateFail(e))?;
+        Ok(surface)
+      } else {
+        Err(WindowHandleMismatch)
+      }
+    }
+
     // TODO: support UNIX
   }
 }

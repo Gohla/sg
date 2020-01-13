@@ -1,0 +1,44 @@
+= SG: Some/Space Game
+Gabriël Konat <g.d.p.konat@tudelft.nl>
+
+== Requirements
+
+* https://www.rust-lang.org/[Rust]
+* https://cmake.org/[CMake]
+* https://vulkan.lunarg.com/sdk/home[Vulkan SDK]
+
+=== macOS
+
+Install `rustup-init` via Homebrew: `brew install rustup-init`, then run `rustup-init` and follow the instructions.
+
+Install CMake via Homebrew: `brew install cmake`.
+
+Unpack the Vulkan SDK to a directory, for example `~/.vulkansdk`.
+Then export the following environment variables, assuming `VULKAN_SDK` is set to the directory where the SDK was unpacked to:
+
+* `VK_LAYER_PATH="$VULKAN_SDK/etc/vulkan/explicit_layer.d"`
+* `VK_ICD_FILENAMES="$VULKAN_SDK/etc/vulkan/icd.d/MoltenVK_icd.json"`
+* `VK_LOADER_DEBUG="warn"`
+
+For example, add the following to your `~/.profile` file:
+
+[bash]
+----
+export VULKAN_SDK="$HOME/.vulkansdk/macOS"
+export VK_LAYER_PATH="$VULKAN_SDK/etc/vulkan/explicit_layer.d"
+export VK_ICD_FILENAMES="$VULKAN_SDK/etc/vulkan/icd.d/MoltenVK_icd.json"
+export VK_LOADER_DEBUG="warn"
+----
+
+== Compiling/Running
+
+Compile and run with `cargo run --package client`.
+
+=== macOS
+
+Set the `DYLD_LIBRARY_PATH` environment variable to `$VULKAN_SDK/macOS/lib` when running. For example:
+
+[bash]
+----
+DYLD_LIBRARY_PATH="$VULKAN_SDK/macOS/lib" cargo run --package client
+----
