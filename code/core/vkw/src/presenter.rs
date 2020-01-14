@@ -1,7 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::vk::{self, CommandBuffer, Extent2D, Framebuffer, Offset2D, Rect2D, Semaphore, Viewport};
 use log::debug;
-
 use crate::device::Device;
 use crate::device::swapchain_extension::{AcquireNextImageError, QueuePresentError, Swapchain};
 use crate::framebuffer::FramebufferCreateError;

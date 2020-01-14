@@ -236,6 +236,11 @@ impl MappedMemory<'_> {
   }
 
   #[inline]
+  pub unsafe fn copy_from_bytes_offset_ptr(&self, src: *const u8, dst_offset: isize, count: usize) {
+    std::ptr::copy_nonoverlapping(src, self.ptr.offset(dst_offset), count);
+  }
+
+  #[inline]
   pub unsafe fn unmap(self) { /* Just drops self */ }
 }
 

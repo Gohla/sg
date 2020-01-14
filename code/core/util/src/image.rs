@@ -123,7 +123,7 @@ impl ImageData {
 }
 
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum Components { Components1, Components2, Components3, Components4 }
 
 impl From<Components> for u8 {
@@ -149,7 +149,7 @@ impl From<u8> for Components {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct Dimensions {
   pub width: u32,
   pub height: u32,
