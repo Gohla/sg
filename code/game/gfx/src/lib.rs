@@ -3,7 +3,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
-use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PhysicalDeviceDescriptorIndexingFeaturesEXT, PipelineStageFlags, RenderPass};
+use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
@@ -53,7 +53,7 @@ impl Gfx {
     require_validation_layer: bool,
     max_frames_in_flight: NonZeroU32,
     window: RawWindowHandle,
-    initial_screen_size: ScreenSize
+    initial_screen_size: ScreenSize,
   ) -> Result<Gfx> {
     let entry = Entry::new()
       .with_context(|| "Failed to create VKW entry")?;
@@ -73,7 +73,7 @@ impl Gfx {
         Some(c_str!("SG GFX")),
         None,
         Some(VkVersion::new(1, 1, 0)),
-        features_query
+        features_query,
       ).with_context(|| "Failed to create VKW instance")?;
       instance
     };
@@ -90,14 +90,9 @@ impl Gfx {
       let features_query = {
         let mut query = DeviceFeaturesQuery::new();
         query.require_swapchain_extension();
-        query.require_descriptor_indexing_extension();
         query.require_features(PhysicalDeviceFeatures::builder()
-          .build());
-        query.require_descriptor_indexing_features(PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
-          .shader_sampled_image_array_non_uniform_indexing(true)
-          .descriptor_binding_variable_descriptor_count(true)
-          .runtime_descriptor_array(true)
-          .build());
+          .build()
+        );
         query
       };
       Device::new(&instance, features_query, Some(&surface))
@@ -217,7 +212,7 @@ impl Gfx {
     &mut self,
     camera_input: CameraInput,
     _extrapolation: f64,
-    frame_time: Duration
+    frame_time: Duration,
   ) -> Result<()> {
     // Recreate surface-extent dependent items if needed.
     if let Some(extent) = self.surface_change_handler.query_surface_change(self.swapchain.extent) {
@@ -266,7 +261,7 @@ impl Gfx {
         &[render_state.image_acquired_semaphore],
         &[PipelineStageFlags::TOP_OF_PIPE],
         &[render_state.render_complete_semaphore],
-        Some(render_state.render_complete_fence)
+        Some(render_state.render_complete_fence),
       ).with_context(|| "Failed to submit command buffer")?;
     }
 

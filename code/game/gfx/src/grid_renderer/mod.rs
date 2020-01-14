@@ -178,7 +178,7 @@ impl GridRendererSys {
           false,
           uniform_buffer.buffer,
           0,
-          size_of::<FragmentUniformData>() as DeviceSize
+          size_of::<FragmentUniformData>() as DeviceSize,
         )
         .do_update(device)
       ;

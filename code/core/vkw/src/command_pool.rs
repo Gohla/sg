@@ -111,14 +111,14 @@ pub enum AllocateRecordSubmitWaitError {
   #[error(transparent)]
   SubmitFail(#[from] CommandBufferSubmitError),
   #[error(transparent)]
-  FenceWaitFail(#[from] FenceWaitError)
+  FenceWaitFail(#[from] FenceWaitError),
 }
 
 impl Device {
   pub unsafe fn allocate_record_submit_wait<T, F: FnOnce(CommandBuffer) -> Result<T, anyhow::Error>>(
     &self,
     command_pool: CommandPool,
-    recorder: F
+    recorder: F,
   ) -> Result<T, AllocateRecordSubmitWaitError> {
     use AllocateRecordSubmitWaitError::*;
     let command_buffer = self.allocate_command_buffer(command_pool, false)?;
@@ -142,7 +142,7 @@ impl Device {
     &self,
     allocator: &Allocator,
     command_pool: CommandPool,
-    recorder: F
+    recorder: F,
   ) -> Result<Vec<T>, AllocateRecordSubmitWaitError> {
     use AllocateRecordSubmitWaitError::*;
     let command_buffer = self.allocate_command_buffer(command_pool, false)?;
@@ -164,7 +164,7 @@ pub trait RecordedResource<T> {
 
 pub struct RecordedStagingBuffer<T> {
   staging_buffer: BufferAllocation,
-  result: T
+  result: T,
 }
 
 impl<T> RecordedStagingBuffer<T> {

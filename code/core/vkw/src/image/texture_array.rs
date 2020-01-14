@@ -127,11 +127,11 @@ impl Device {
       format,
       ImageLayout::TRANSFER_DST_OPTIMAL,
       ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-      1,
+      layer_count as u32,
       command_buffer,
     )?;
 
-    let view = self.create_image_view(image_allocation.image, format, vk::ImageViewType::TYPE_2D, ImageAspectFlags::COLOR, layer_count as u32)?;
+    let view = self.create_image_view(image_allocation.image, format, vk::ImageViewType::TYPE_2D_ARRAY, ImageAspectFlags::COLOR, layer_count as u32)?;
     let sampler = self.create_default_sampler()?;
     let texture = Texture { allocation: image_allocation, view, sampler };
     Ok(RecordedStagingBuffer::new(staging_buffer, texture))
