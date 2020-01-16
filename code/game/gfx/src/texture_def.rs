@@ -34,7 +34,6 @@ impl TextureDefBuilder {
     let texture_array = device.allocate_record_resources_submit_wait(allocator, transient_command_pool, |command_buffer| {
       Ok(std::iter::once(device.allocate_record_copy_texture_array(&self.data, allocator, format, command_buffer)?))
     })?.pop().unwrap();
-    //let count = texture_array.len() as u32;
 
     let descriptor_set_layout_bindings = &[descriptor_set::sampler_layout_binding(0, 1)];
     let descriptor_set_layout_flags = &[];

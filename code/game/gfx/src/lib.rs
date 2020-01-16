@@ -91,6 +91,8 @@ impl Gfx {
         let mut query = DeviceFeaturesQuery::new();
         query.require_swapchain_extension();
         query.require_features(PhysicalDeviceFeatures::builder()
+          .shader_uniform_buffer_array_dynamic_indexing(true)
+          .shader_sampled_image_array_dynamic_indexing(true)
           .build()
         );
         query
@@ -248,7 +250,7 @@ impl Gfx {
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
       self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
 
-      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, self.camera_sys.view_projection_matrix(), extent, command_buffer);
+      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, self.camera_sys.view_projection_matrix(), command_buffer);
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);

@@ -186,9 +186,9 @@ impl GridRendererSys {
     }
   }
 
-  pub fn render(&self, device: &Device, texture_def: &TextureDef, render_state: &GridRenderState, view_projection: Mat4, viewport: Extent2D, command_buffer: CommandBuffer) {
+  pub fn render(&self, device: &Device, texture_def: &TextureDef, render_state: &GridRenderState, view_projection: Mat4, command_buffer: CommandBuffer) {
     let vertex_uniform_data = VertexUniformData { mvp: view_projection };
-    let fragment_uniform_data = FragmentUniformData::new(viewport.width as f32, viewport.height as f32);
+    let fragment_uniform_data = FragmentUniformData::new();
     unsafe {
       render_state.uniform_buffer.get_mapped_data().unwrap(/* CORRECTNESS: buffer is persistently mapped */).copy_from(&fragment_uniform_data);
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
@@ -310,7 +310,6 @@ impl VertexUniformData {
 #[repr(C)]
 struct FragmentUniformData {
   texture_ids: [u32; 64],
-  viewport: Vec2,
 }
 
 impl FragmentUniformData {
@@ -326,14 +325,13 @@ impl FragmentUniformData {
     ]
   }
 
-  pub fn new(width: f32, height: f32) -> Self {
+  pub fn new() -> Self {
     let mut texture_ids = [0; 64];
     texture_ids[0] = 2;
     texture_ids[8] = 1;
     texture_ids[27] = 2;
     Self {
       texture_ids,
-      viewport: Vec2::new(width, height),
     }
   }
 }
