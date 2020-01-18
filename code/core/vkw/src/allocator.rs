@@ -137,7 +137,7 @@ pub enum StagingBufferAllocationError {
 }
 
 impl Allocator {
-  pub unsafe fn create_staging_from_slice<T>(&self, slice: &[T]) -> Result<BufferAllocation, StagingBufferAllocationError> {
+  pub unsafe fn create_staging_buffer_from_slice<T>(&self, slice: &[T]) -> Result<BufferAllocation, StagingBufferAllocationError> {
     let size = size_of::<T>() * slice.len();
     let buffer_allocation = self.create_staging_buffer(size)?;
     {

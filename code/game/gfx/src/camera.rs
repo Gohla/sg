@@ -1,5 +1,5 @@
 use ultraviolet::{Mat4, Vec2, Vec3};
-use ultraviolet::projection::lh_yup::orthographic_vk;
+use ultraviolet::projection;
 
 use math::screen::{PhysicalPosition, PhysicalSize};
 use util::timing::Duration;
@@ -136,9 +136,10 @@ impl CameraSys {
       let max_y = self.zoom / 2.0;
       let min_z = 0.01f32;
       let max_z = 1000.0f32;
-      orthographic_vk(min_x, max_x,
+      projection::lh_yup::orthographic_vk(min_x, max_x,
         min_y, max_y,
-        min_z, max_z)
+        min_z, max_z
+      )
     };
 
     // Clip matrix to 'fix' Vulkan's co-ordinate space: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/

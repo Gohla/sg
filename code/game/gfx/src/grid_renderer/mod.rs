@@ -17,18 +17,16 @@ pub struct InGridRender(TextureIdx);
 // Grid renderer system
 
 pub struct GridRendererSys {
-  descriptor_set_layout: DescriptorSetLayout,
   pipeline_layout: PipelineLayout,
-
-  descriptor_pool: DescriptorPool,
 
   vert_shader: ShaderModule,
   frag_shader: ShaderModule,
 
   pipeline: Pipeline,
 
-  vertex_buffer: BufferAllocation,
-  index_buffer: BufferAllocation,
+  quads_vertex_buffer: BufferAllocation,
+  quads_index_buffer: BufferAllocation,
+  quads_indices_count: usize,
 }
 
 impl GridRendererSys {
@@ -36,22 +34,19 @@ impl GridRendererSys {
     device: &Device,
     allocator: &Allocator,
     texture_def: &TextureDef,
-    render_state_count: u32,
+    _render_state_count: u32,
     render_pass: RenderPass,
     pipeline_cache: PipelineCache,
     transient_command_pool: CommandPool,
   ) -> Result<Self> {
     unsafe {
-      let descriptor_set_layout = device.create_descriptor_set_layout(&FragmentUniformData::bindings(), &FragmentUniformData::flags())?;
-      let pipeline_layout = device.create_pipeline_layout(&[texture_def.descriptor_set_layout, descriptor_set_layout], &[VertexUniformData::push_constant_range()])?;
-
-      let descriptor_pool = device.create_descriptor_pool(render_state_count, &[descriptor_set::uniform_pool_size(render_state_count)])?;
+      let pipeline_layout = device.create_pipeline_layout(&[texture_def.descriptor_set_layout], &[MVPUniformData::push_constant_range()])?;
 
       let vert_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.vert.spv"))?;
       let frag_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.frag.spv"))?;
 
-      let vertex_bindings = VertexData::bindings();
-      let vertex_attributes = VertexData::attributes();
+      let vertex_bindings = QuadsVertexData::bindings();
+      let vertex_attributes = QuadsVertexData::attributes();
 
       let pipeline = {
         let stages = &[
@@ -119,94 +114,78 @@ impl GridRendererSys {
         device.create_graphics_pipeline(pipeline_cache, &create_info)?
       };
 
-      let vertex_data = VertexData::quad_vertex_data();
-      let vertex_data_size = size_of::<VertexData>() * vertex_data.len();
-      let index_data = VertexData::quad_index_data();
-      let index_data_size = size_of::<u16>() * index_data.len();
-
-      let vertex_staging = allocator.create_staging_buffer(vertex_data_size)?;
-      vertex_staging.map(allocator)?.copy_from_slice(&vertex_data);
-      let index_staging = allocator.create_staging_buffer(index_data_size)?;
-      index_staging.map(allocator)?.copy_from_slice(&index_data);
-
-      let vertex_buffer = allocator.create_gpu_vertex_buffer(vertex_data_size)?;
-      let index_buffer = allocator.create_gpu_index_buffer(vertex_data_size)?;
-
+      // Create GPU buffers for immutable quad vertex and index data.
+      let quads_vertices = QuadsVertexData::create_vertices(8);
+      let quads_vertices_count = quads_vertices.len();
+      let quads_vertices_size = quads_vertices_count * size_of::<QuadsVertexData>();
+      let quads_indices = QuadsIndexData::create_indices(8);
+      let quads_indices_count = quads_indices.len();
+      let quads_indices_size = quads_indices_count * size_of::<QuadsIndexData>();
+      let vertex_staging = allocator.create_staging_buffer_from_slice(&quads_vertices)?;
+      let index_staging = allocator.create_staging_buffer_from_slice(&quads_indices)?;
+      let quads_vertex_buffer = allocator.create_gpu_vertex_buffer(quads_vertices_size)?;
+      let quads_index_buffer = allocator.create_gpu_index_buffer(quads_indices_size)?;
       device.allocate_record_submit_wait(transient_command_pool, |command_buffer| {
-        device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, vertex_buffer.buffer, &[
+        device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, quads_vertex_buffer.buffer, &[
           BufferCopy::builder()
-            .size(vertex_data_size as u64)
+            .size(quads_vertices_size as u64)
             .build()
         ]);
-        device.cmd_copy_buffer(command_buffer, index_staging.buffer, index_buffer.buffer, &[
+        device.cmd_copy_buffer(command_buffer, index_staging.buffer, quads_index_buffer.buffer, &[
           BufferCopy::builder()
-            .size(index_data_size as u64)
+            .size(quads_indices_size as u64)
             .build()
         ]);
         Ok(())
       })?;
-
       index_staging.destroy(allocator);
       vertex_staging.destroy(allocator);
 
       Ok(Self {
-        descriptor_set_layout,
         pipeline_layout,
-        descriptor_pool,
         vert_shader,
         frag_shader,
         pipeline,
-        vertex_buffer,
-        index_buffer,
+        quads_vertex_buffer,
+        quads_index_buffer,
+        quads_indices_count,
       })
     }
   }
 
   pub fn create_render_state(
     &self,
-    device: &Device,
-    allocator: &Allocator,
+    _device: &Device,
+    _allocator: &Allocator,
   ) -> Result<GridRenderState> {
-    unsafe {
-      let uniform_buffer = allocator.create_cpugpu_uniform_buffer_mapped(size_of::<FragmentUniformData>())?;
-      let descriptor_set = device.allocate_descriptor_set(self.descriptor_pool, self.descriptor_set_layout)?;
-      DescriptorSetUpdateBuilder::new()
-        .add_uniform_buffer_write(
-          descriptor_set,
-          0,
-          0,
-          uniform_buffer.buffer,
-          0,
-          size_of::<FragmentUniformData>() as DeviceSize,
-        )
-        .do_update(device)
-      ;
-      Ok(GridRenderState { uniform_buffer, descriptor_set })
-    }
+    Ok(GridRenderState {})
   }
 
-  pub fn render(&self, device: &Device, texture_def: &TextureDef, render_state: &GridRenderState, view_projection: Mat4, command_buffer: CommandBuffer) {
-    let vertex_uniform_data = VertexUniformData { mvp: view_projection };
-    let fragment_uniform_data = FragmentUniformData::new();
+  pub fn render(
+    &self,
+    device: &Device,
+    texture_def: &TextureDef,
+    _render_state: &GridRenderState,
+    view_projection: Mat4,
+    command_buffer: CommandBuffer
+  ) {
+    let vertex_uniform_data = MVPUniformData { mvp: view_projection };
     unsafe {
-      render_state.uniform_buffer.get_mapped_data().unwrap(/* CORRECTNESS: buffer is persistently mapped */).copy_from(&fragment_uniform_data);
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
-      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.vertex_buffer.buffer], &[0]);
-      device.cmd_bind_index_buffer(command_buffer, self.index_buffer.buffer, 0, IndexType::UINT16);
-      device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set, render_state.descriptor_set], &[]);
+      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
+      device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
+      device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
       device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, vertex_uniform_data.as_bytes());
-      device.cmd_draw_indexed(command_buffer, 6, 1, 0, 0, 0);
+      device.cmd_draw_indexed(command_buffer, self.quads_indices_count as u32, 1, 0, 0, 0);
     }
   }
 
   pub fn destroy(&mut self, device: &Device, allocator: &Allocator) {
     unsafe {
-      self.vertex_buffer.destroy(allocator);
-      self.index_buffer.destroy(allocator);
+      self.quads_vertex_buffer.destroy(allocator);
+      self.quads_index_buffer.destroy(allocator);
       device.destroy_pipeline(self.pipeline);
       device.destroy_pipeline_layout(self.pipeline_layout);
-      device.destroy_descriptor_set_layout(self.descriptor_set_layout);
-      device.destroy_descriptor_pool(self.descriptor_pool);
       device.destroy_shader_module(self.vert_shader);
       device.destroy_shader_module(self.frag_shader);
     }
@@ -215,34 +194,99 @@ impl GridRendererSys {
 
 // Render state
 
-pub struct GridRenderState {
-  uniform_buffer: BufferAllocation,
-  descriptor_set: DescriptorSet,
-}
+pub struct GridRenderState {}
 
 impl GridRenderState {
-  pub fn destroy(&self, allocator: &Allocator) {
-    unsafe {
-      self.uniform_buffer.destroy(allocator);
-    }
-  }
+  pub fn destroy(&self, _allocator: &Allocator) {}
 }
 
-// Vertex data
+// Quads vertex data (GPU buffer, immutable)
 
 #[allow(dead_code)]
 #[repr(C)]
-struct VertexData {
-  pos: Vec2,
-  tex: Vec2,
-}
+struct QuadsVertexData(Vec2);
 
-impl VertexData {
-  pub fn bindings() -> Vec<VertexInputBindingDescription> {
+impl QuadsVertexData {
+  fn bindings() -> Vec<VertexInputBindingDescription> {
     vec![
       VertexInputBindingDescription::builder()
         .binding(0)
-        .stride(size_of::<VertexData>() as u32)
+        .stride(size_of::<Self>() as u32)
+        .input_rate(VertexInputRate::VERTEX)
+        .build(),
+    ]
+  }
+
+  fn attributes() -> Vec<VertexInputAttributeDescription> {
+    vec![
+      VertexInputAttributeDescription::builder()
+        .location(0)
+        .binding(0)
+        .format(Format::R32G32_SFLOAT)
+        .offset(0)
+        .build(),
+    ]
+  }
+
+  fn create_vertices(grid_length: u32) -> Vec<Self> {
+    let quad_count = grid_length * grid_length;
+    let vertices_count = quad_count * 4;
+    let mut vec = Vec::with_capacity(vertices_count as usize);
+    let half = grid_length as i32 / 2;
+    let half_neg = -half;
+    for x in half_neg..half {
+      let x = x as f32;
+      for y in half_neg..half {
+        let y = y as f32;
+        vec.push(Self(Vec2::new(x - 0.5, y - 0.5)));
+        vec.push(Self(Vec2::new(x + 0.5, y - 0.5)));
+        vec.push(Self(Vec2::new(x - 0.5, y + 0.5)));
+        vec.push(Self(Vec2::new(x + 0.5, y + 0.5)));
+      }
+    }
+    vec
+  }
+}
+
+// Quads index data (GPU buffer, immutable)
+
+#[allow(dead_code)]
+#[repr(C)]
+struct QuadsIndexData(u16);
+
+impl QuadsIndexData {
+  #[inline]
+  pub fn index_type() -> IndexType { IndexType::UINT16 }
+
+  pub fn create_indices(grid_length: usize) -> Vec<QuadsIndexData> {
+    let mut vec = Vec::with_capacity(grid_length * grid_length * 6);
+    for i in 0..(grid_length * grid_length) as u16 {
+      vec.push(Self((i * 4) + 0));
+      vec.push(Self((i * 4) + 1));
+      vec.push(Self((i * 4) + 2));
+      vec.push(Self((i * 4) + 1));
+      vec.push(Self((i * 4) + 3));
+      vec.push(Self((i * 4) + 2));
+    }
+    vec
+  }
+}
+
+// Texture UV vertex data (CPU-GPU buffer, mutable)
+
+#[allow(dead_code)]
+#[repr(C)]
+struct TextureUVVertexData {
+  tex: Vec2,
+}
+
+#[allow(dead_code)]
+impl TextureUVVertexData {
+  pub fn bindings() -> Vec<VertexInputBindingDescription> {
+    vec![
+      VertexInputBindingDescription::builder()
+        .binding(1)
+        .stride(size_of::<Self>() as u32)
         .input_rate(VertexInputRate::VERTEX)
         .build(),
     ]
@@ -251,47 +295,29 @@ impl VertexData {
   pub fn attributes() -> Vec<VertexInputAttributeDescription> {
     vec![
       VertexInputAttributeDescription::builder()
-        .location(0)
+        .location(1)
         .binding(0)
         .format(Format::R32G32_SFLOAT)
         .offset(0)
         .build(),
-      VertexInputAttributeDescription::builder()
-        .location(1)
-        .binding(0)
-        .format(Format::R32G32_SFLOAT)
-        .offset(size_of::<Vec2>() as u32)
-        .build(),
     ]
   }
 
-  pub fn new(x: f32, y: f32, u: f32, v: f32) -> Self {
-    Self { pos: Vec2::new(x, y), tex: Vec2::new(u, v) }
-  }
-
-  pub fn quad_vertex_data() -> Vec<Self> {
-    vec![
-      VertexData::new(-16.0, -16.0, 0.0, 1.0),
-      VertexData::new(16.0, -16.0, 1.0, 1.0),
-      VertexData::new(-16.0, 16.0, 0.0, 0.0),
-      VertexData::new(16.0, 16.0, 1.0, 0.0),
-    ]
-  }
-
-  pub fn quad_index_data() -> Vec<u16> {
-    vec![0, 1, 2, 1, 3, 2]
+  pub fn new(u: f32, v: f32) -> Self {
+    Self { tex: Vec2::new(u, v) }
   }
 }
 
-// Vertex uniform data (push constant)
+
+// MVP (model-view-projection matrix) uniform data (push constant, mutable)
 
 #[allow(dead_code)]
 #[repr(C)]
-struct VertexUniformData {
+struct MVPUniformData {
   mvp: Mat4,
 }
 
-impl VertexUniformData {
+impl MVPUniformData {
   pub fn push_constant_range() -> PushConstantRange {
     push_constant::vertex_range(size_of::<Self>() as u32, 0)
   }
@@ -302,36 +328,3 @@ impl VertexUniformData {
     std::slice::from_raw_parts(bytes_ptr, size_of::<Self>())
   }
 }
-
-// Fragment uniform data
-
-#[allow(dead_code)]
-#[repr(C)]
-struct FragmentUniformData {
-  texture_ids: [u32; 64],
-}
-
-impl FragmentUniformData {
-  pub fn bindings() -> Vec<DescriptorSetLayoutBinding> {
-    vec![
-      descriptor_set::uniform_layout_binding(0, 1, ShaderStageFlags::FRAGMENT),
-    ]
-  }
-
-  pub fn flags() -> Vec<DescriptorBindingFlagsEXT> {
-    vec![
-      DescriptorBindingFlagsEXT::empty(),
-    ]
-  }
-
-  pub fn new() -> Self {
-    let mut texture_ids = [0; 64];
-    texture_ids[0] = 2;
-    texture_ids[8] = 1;
-    texture_ids[27] = 2;
-    Self {
-      texture_ids,
-    }
-  }
-}
-

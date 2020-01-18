@@ -63,7 +63,7 @@ impl Device {
       if dimensions.components != Components::Components4 {
         return Err(IncorrectComponentCount(dimensions.components.into()))
       }
-      let staging_buffer = allocator.create_staging_from_slice(image_data.data_slice())?;
+      let staging_buffer = allocator.create_staging_buffer_from_slice(image_data.data_slice())?;
       let image_info = vk::ImageCreateInfo::builder()
         .image_type(vk::ImageType::TYPE_2D)
         .format(format)
