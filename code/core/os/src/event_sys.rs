@@ -18,7 +18,6 @@ pub struct OsEventSys {
   window_id: WindowId,
   scale_factor: Scale,
   inner_size: PhysicalSize,
-  first_resize: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -83,7 +82,6 @@ impl OsEventSys {
       window_id: window.winit_window_id(),
       scale_factor: window.window_scale_factor(),
       inner_size: window.window_inner_physical_size(),
-      first_resize: true,
     };
     (os_event_sys, input_event_rx, os_event_rx, )
   }
@@ -136,26 +134,16 @@ impl OsEventSys {
           WindowEvent::Resized(inner_size) => {
             let inner_size = inner_size.into_util();
             self.inner_size = inner_size;
-
-            if !self.first_resize {
-              let screen_size = ScreenSize::from_physical_scale(inner_size, self.scale_factor);
-              self.os_event_tx.send(OsEvent::WindowResized(screen_size))
-                .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
-            } else {
-              self.first_resize = false;
-            }
+            let screen_size = ScreenSize::from_physical_scale(inner_size, self.scale_factor);
+            self.os_event_tx.send(OsEvent::WindowResized(screen_size))
+              .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
             let scale_factor = scale_factor.into();
             self.scale_factor = scale_factor;
-
-            if !self.first_resize {
-              let screen_size = ScreenSize::from_physical_scale(self.inner_size, scale_factor);
-              self.os_event_tx.send(OsEvent::WindowResized(screen_size))
-                .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
-            } else {
-              self.first_resize = false;
-            }
+            let screen_size = ScreenSize::from_physical_scale(self.inner_size, scale_factor);
+            self.os_event_tx.send(OsEvent::WindowResized(screen_size))
+              .unwrap_or_else(|_| *control_flow = ControlFlow::Exit);
           }
           _ => {}
         }

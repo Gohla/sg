@@ -25,12 +25,8 @@ pub fn layout_binding(
     .build()
 }
 
-fn uniform_descriptor_type(dynamic: bool) -> DescriptorType {
-  if dynamic { DescriptorType::UNIFORM_BUFFER_DYNAMIC } else { DescriptorType::UNIFORM_BUFFER }
-}
-
-pub fn uniform_layout_binding(binding: u32, count: u32, dynamic: bool, stage_flags: ShaderStageFlags) -> DescriptorSetLayoutBinding {
-  layout_binding(binding, uniform_descriptor_type(dynamic), count, stage_flags)
+pub fn uniform_layout_binding(binding: u32, count: u32, stage_flags: ShaderStageFlags) -> DescriptorSetLayoutBinding {
+  layout_binding(binding, DescriptorType::UNIFORM_BUFFER, count, stage_flags)
 }
 
 pub fn sampler_layout_binding(binding: u32, count: u32) -> DescriptorSetLayoutBinding {
@@ -73,8 +69,8 @@ pub fn pool_size(ty: DescriptorType, count: u32) -> DescriptorPoolSize {
   DescriptorPoolSize::builder().ty(ty).descriptor_count(count).build()
 }
 
-pub fn uniform_pool_size(count: u32, dynamic: bool) -> DescriptorPoolSize {
-  pool_size(uniform_descriptor_type(dynamic), count)
+pub fn uniform_pool_size(count: u32) -> DescriptorPoolSize {
+  pool_size(DescriptorType::UNIFORM_BUFFER, count)
 }
 
 pub fn sampler_pool_size(count: u32) -> DescriptorPoolSize {
@@ -173,12 +169,11 @@ impl DescriptorSetUpdateBuilder {
     dst_set: DescriptorSet,
     dst_binding: u32,
     dst_array_element: u32,
-    dynamic: bool,
     buffer: Buffer,
     buffer_offset: DeviceSize,
     buffer_range: DeviceSize
   ) -> Self {
-    self.add_buffer_write(dst_set, dst_binding, dst_array_element, uniform_descriptor_type(dynamic), buffer, buffer_offset, buffer_range)
+    self.add_buffer_write(dst_set, dst_binding, dst_array_element, DescriptorType::UNIFORM_BUFFER, buffer, buffer_offset, buffer_range)
   }
 
   pub unsafe fn do_update(&self, device: &Device) {

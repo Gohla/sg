@@ -87,41 +87,41 @@ impl Allocator {
   }
 
 
-  pub unsafe fn create_static_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_gpu_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_vertex_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_vertex_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_vertex_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::VERTEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 
 
-  pub unsafe fn create_static_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_gpu_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::INDEX_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_index_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_index_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_index_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::INDEX_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 
 
-  pub unsafe fn create_static_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_gpu_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::TRANSFER_DST | BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::GpuOnly, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_uniform_buffer(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::NONE)
   }
 
-  pub unsafe fn create_dynamic_uniform_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
+  pub unsafe fn create_cpugpu_uniform_buffer_mapped(&self, size: usize) -> Result<BufferAllocation, BufferAllocationError> {
     self.create_buffer(size, BufferUsageFlags::UNIFORM_BUFFER, MemoryUsage::CpuToGpu, AllocationCreateFlags::MAPPED)
   }
 }

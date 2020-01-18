@@ -45,7 +45,7 @@ impl GridRendererSys {
       let descriptor_set_layout = device.create_descriptor_set_layout(&FragmentUniformData::bindings(), &FragmentUniformData::flags())?;
       let pipeline_layout = device.create_pipeline_layout(&[texture_def.descriptor_set_layout, descriptor_set_layout], &[VertexUniformData::push_constant_range()])?;
 
-      let descriptor_pool = device.create_descriptor_pool(render_state_count, &[descriptor_set::uniform_pool_size(render_state_count, false)])?;
+      let descriptor_pool = device.create_descriptor_pool(render_state_count, &[descriptor_set::uniform_pool_size(render_state_count)])?;
 
       let vert_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.vert.spv"))?;
       let frag_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.frag.spv"))?;
@@ -129,8 +129,8 @@ impl GridRendererSys {
       let index_staging = allocator.create_staging_buffer(index_data_size)?;
       index_staging.map(allocator)?.copy_from_slice(&index_data);
 
-      let vertex_buffer = allocator.create_static_vertex_buffer(vertex_data_size)?;
-      let index_buffer = allocator.create_static_index_buffer(vertex_data_size)?;
+      let vertex_buffer = allocator.create_gpu_vertex_buffer(vertex_data_size)?;
+      let index_buffer = allocator.create_gpu_index_buffer(vertex_data_size)?;
 
       device.allocate_record_submit_wait(transient_command_pool, |command_buffer| {
         device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, vertex_buffer.buffer, &[
@@ -168,14 +168,13 @@ impl GridRendererSys {
     allocator: &Allocator,
   ) -> Result<GridRenderState> {
     unsafe {
-      let uniform_buffer = allocator.create_dynamic_uniform_buffer_mapped(size_of::<FragmentUniformData>())?;
+      let uniform_buffer = allocator.create_cpugpu_uniform_buffer_mapped(size_of::<FragmentUniformData>())?;
       let descriptor_set = device.allocate_descriptor_set(self.descriptor_pool, self.descriptor_set_layout)?;
       DescriptorSetUpdateBuilder::new()
         .add_uniform_buffer_write(
           descriptor_set,
           0,
           0,
-          false,
           uniform_buffer.buffer,
           0,
           size_of::<FragmentUniformData>() as DeviceSize,
@@ -315,7 +314,7 @@ struct FragmentUniformData {
 impl FragmentUniformData {
   pub fn bindings() -> Vec<DescriptorSetLayoutBinding> {
     vec![
-      descriptor_set::uniform_layout_binding(0, 1, false, ShaderStageFlags::FRAGMENT),
+      descriptor_set::uniform_layout_binding(0, 1, ShaderStageFlags::FRAGMENT),
     ]
   }
 
