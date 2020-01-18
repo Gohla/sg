@@ -1,16 +1,18 @@
 use ash::version::DeviceV1_0;
-use ash::vk::{self, Format, Image, ImageAspectFlags, ImageView, ImageViewType, Result as VkError};
+use ash::vk::{self, Buffer, BufferView, DeviceSize, Format, Image, ImageAspectFlags, ImageView, ImageViewType, Result as VkError};
 use log::trace;
 use thiserror::Error;
 
 use crate::device::Device;
+
+// Image view creation/destruction
 
 #[derive(Error, Debug)]
 #[error("Failed to create image view: {0:?}")]
 pub struct ImageViewCreateError(#[from] VkError);
 
 impl Device {
-  pub fn create_image_view(
+  pub unsafe fn create_image_view(
     &self,
     image: Image,
     format: Format,
@@ -38,7 +40,7 @@ impl Device {
         .build()
       )
       ;
-    let image_view = unsafe { self.wrapped.create_image_view(&create_info, None) }?;
+    let image_view = self.wrapped.create_image_view(&create_info, None)?;
     trace!("Created image view {:?}", image_view);
     Ok(image_view)
   }
@@ -46,5 +48,29 @@ impl Device {
   pub unsafe fn destroy_image_view(&self, image_view: ImageView) {
     trace!("Destroying image view {:?}", image_view);
     self.wrapped.destroy_image_view(image_view, None);
+  }
+}
+
+// Buffer view creation/destruction
+
+#[derive(Error, Debug)]
+#[error("Failed to create image view: {0:?}")]
+pub struct BufferViewCreateError(#[from] VkError);
+
+impl Device {
+  pub unsafe fn create_buffer_view(&self, buffer: Buffer, format: Format, offset: DeviceSize, range: DeviceSize) -> Result<BufferView, BufferViewCreateError> {
+    let create_info = vk::BufferViewCreateInfo::builder()
+      .buffer(buffer)
+      .format(format)
+      .offset(offset)
+      .range(range)
+      ;
+    let buffer_view = self.wrapped.create_buffer_view(&create_info, None)?;
+    trace!("Created buffer view {:?}", buffer_view);
+    Ok(buffer_view)
+  }
+
+  pub unsafe fn destroy_buffer_view(&self, buffer_view: BufferView) {
+    self.wrapped.destroy_buffer_view(buffer_view, None);
   }
 }

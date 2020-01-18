@@ -4,15 +4,15 @@ pub use ash::{
   Instance as VkInstance,
   version::{EntryV1_0, InstanceV1_0},
   vk::{
-    BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, ColorComponentFlags, CommandBuffer,
-    CommandPool, CullModeFlags, DescriptorBindingFlagsEXT,
-    DescriptorPool, DescriptorSet, DescriptorSetLayout,
-    DescriptorSetLayoutBinding, DescriptorType, DeviceSize, DynamicState, Extent2D, Fence,
-    Format, FormatFeatureFlags, Framebuffer, FrontFace, ImageTiling, IndexType, LogicOp,
-    PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout, PipelineShaderStageCreateInfoBuilder, PolygonMode,
-    PresentModeKHR, PrimitiveTopology, PushConstantRange, Rect2D,
-    RenderPass, SampleCountFlags, Semaphore, ShaderModule, ShaderStageFlags,
-    VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate
+    BlendFactor, BlendOp, Buffer, BufferCopy, BufferCreateInfo, BufferUsageFlags, BufferView, ColorComponentFlags,
+    CommandBuffer, CommandPool, CullModeFlags,
+    DescriptorBindingFlagsEXT, DescriptorPool, DescriptorSet,
+    DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorType, DeviceSize, DynamicState, Extent2D,
+    Fence, Format, FormatFeatureFlags, Framebuffer, FrontFace, ImageTiling, IndexType,
+    LogicOp, PhysicalDeviceFeatures, Pipeline, PipelineBindPoint, PipelineCache, PipelineLayout, PipelineShaderStageCreateInfoBuilder,
+    PolygonMode, PresentModeKHR, PrimitiveTopology, PushConstantRange,
+    Rect2D, RenderPass, SampleCountFlags, Semaphore, ShaderModule,
+    ShaderStageFlags, VertexInputAttributeDescription, VertexInputBindingDescription, VertexInputRate
   },
 };
 pub use vk_mem::{AllocationInfo, MemoryUsage};

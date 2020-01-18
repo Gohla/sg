@@ -199,7 +199,7 @@ impl Swapchain {
       let image_views: Result<Vec<_>, _> = images
         .into_iter()
         .map(|image| {
-          device.create_image_view(image, surface_format.format, vk::ImageViewType::TYPE_2D, vk::ImageAspectFlags::COLOR, 1)
+          unsafe { device.create_image_view(image, surface_format.format, vk::ImageViewType::TYPE_2D, vk::ImageAspectFlags::COLOR, 1) }
         })
         .collect();
       image_views?
