@@ -1,19 +1,19 @@
 use anyhow::Result;
 use ash::vk::ImageLayout;
 
-use util::idx_assigner::IdxAssigner;
+use util::idx_assigner::{self, IdxAssigner};
 use util::image::ImageData;
 use vkw::prelude::*;
 
 // Texture index
 
-#[derive(Default, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub struct TextureIdx(u16);
 
 // Texture def builder
 
 pub struct TextureDefBuilder {
-  assigner: IdxAssigner<u16, TextureIdx>,
+  assigner: IdxAssigner<TextureIdx, u16>,
   data: Vec<ImageData>,
 }
 
@@ -84,12 +84,16 @@ impl TextureDef {
 
 // Implementations
 
-impl Into<TextureIdx> for u16 {
-  #[inline]
-  fn into(self) -> TextureIdx { TextureIdx(self) }
-}
+impl idx_assigner::Item for TextureIdx {
+  type Idx = u16;
 
-impl Into<u16> for TextureIdx {
   #[inline]
-  fn into(self) -> u16 { self.0 }
+  fn new(index: Self::Idx) -> Self {
+    Self(index)
+  }
+
+  #[inline]
+  fn into_idx(self) -> Self::Idx {
+    self.0
+  }
 }

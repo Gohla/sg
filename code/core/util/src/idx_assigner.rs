@@ -16,21 +16,23 @@ pub trait Index: Clone + Copy + PartialOrd + Debug {
   fn overflowing_add(self, rhs: Self) -> (Self, bool);
 }
 
-pub trait Item<Idx: Index>: Default + Clone + Copy + Debug {
-  fn new(index: Idx) -> Self;
+pub trait Item: Default + Clone + Copy + Debug {
+  type Idx: Index;
 
-  fn into_idx(self) -> Idx;
+  fn new(index: Self::Idx) -> Self;
+
+  fn into_idx(self) -> Self::Idx;
 }
 
 // Index allocator
 
 #[derive(Default)]
-pub struct IdxAssigner<Idx: Index, I: Item<Idx>> {
+pub struct IdxAssigner<I: Item<Idx=Idx>, Idx: Index = u32> {
   next_idx: Idx,
   _phantom: PhantomData<I>,
 }
 
-impl<Idx: Index, I: Item<Idx>> IdxAssigner<Idx, I> {
+impl<I: Item<Idx=Idx>, Idx: Index> IdxAssigner<I, Idx> {
   pub fn new() -> Self {
     debug_assert!(I::default().into_idx().is_zero(), "BUG: index in default item {:?} is not zero", I::default());
     Self { next_idx: Idx::one(), _phantom: PhantomData::default() }
@@ -84,11 +86,3 @@ uint_impl!(u16);
 uint_impl!(u32);
 uint_impl!(u64);
 uint_impl!(u128);
-
-impl<Idx: Index + Into<T>, T: Default + Clone + Copy + Debug + Into<Idx>> Item<Idx> for T {
-  #[inline]
-  fn new(idx: Idx) -> Self { idx.into() }
-
-  #[inline]
-  fn into_idx(self) -> Idx { self.into() }
-}

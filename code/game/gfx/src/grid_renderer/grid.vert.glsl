@@ -4,7 +4,7 @@
 // Inputs
 /// Dynamic vertex data
 layout(location = 0) in vec2 pos;
-//layout(location = 1) in vec2 tex;
+layout(location = 1) in vec3 tex;
 /// Dynamic uniform data
 layout(push_constant) uniform VertexUniformData { mat4 mvp; } ud;
 
@@ -15,5 +15,5 @@ layout(location = 0) out vec3 frgTex;
 
 void main() {
   gl_Position = ud.mvp * vec4(pos, 0.0, 1.0);
-  frgTex = vec3(pos, pos.x); // TODO: fix
+  frgTex = tex;
 }

@@ -91,11 +91,11 @@ impl<T> Renderer<T> {
 // API
 
 impl<T> Renderer<T> {
-  pub fn next_render_state(&mut self, device: &Device) -> Result<(&mut RenderState, &T), RenderStateWaitAndResetError> {
+  pub fn next_render_state(&mut self, device: &Device) -> Result<(&mut RenderState, &mut T), RenderStateWaitAndResetError> {
     self.index = (self.index + 1) % self.count;
     let state = &mut self.states[self.index];
     state.wait_and_reset(device)?;
-    let state_custom = &self.states_custom[self.index];
+    let state_custom = &mut self.states_custom[self.index];
     return Ok((state, state_custom));
   }
 }

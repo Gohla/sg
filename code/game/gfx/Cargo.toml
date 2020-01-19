@@ -9,8 +9,10 @@ publish = false
 vkw = {path = "../../core/vkw"}
 math = {path = "../../core/math"}
 util = {path = "../../core/util"}
+sim = {path = "../sim"}
 ash = "0.29"
 vk-mem = "0.2"
+legion = "0.2"
 ultraviolet = "0.4"
 raw-window-handle = "0.3"
 byte-strings = "0.1"

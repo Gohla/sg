@@ -3,19 +3,23 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use anyhow::{Context, Result};
+use winit::event::VirtualKeyCode;
 
+use gfx::camera::CameraInput;
 use gfx::Gfx;
+use gfx::grid_renderer::InGridRender;
+use gfx::texture_def::TextureDefBuilder;
 use math::prelude::*;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::{OsInputSys, RawInput};
 use os::window::Window;
+use sim::{GridCoords, GridDynamics, InGrid, InGridPosition, InGridRotation};
 use sim::legion_sim::Sim;
+use util::image::{Components, ImageData};
 use util::timing::Duration;
 
 use crate::timing::{FrameTime, FrameTimer, TickTimer};
-use gfx::camera::CameraInput;
-use winit::event::VirtualKeyCode;
 
 pub mod timing;
 
@@ -36,13 +40,17 @@ fn main() -> Result<()> {
     (event_sys, event_rx, input_sys)
   };
   // Initialize simulation.
-  let sim = Sim::new();
+  let mut sim = Sim::new();
+  // Initialize game.
+  let texture_def_builder = init(&mut sim)
+    .with_context(|| "Failed to initialize game")?;
   // Initialize graphics.
   let gfx = Gfx::new(
     cfg!(debug_assertions),
     NonZeroU32::new(2).unwrap(),
     window.winit_raw_window_handle(),
-    window.window_inner_size()
+    window.window_inner_size(),
+    texture_def_builder,
   ).with_context(|| "Failed to create GFX instance")?;
   // Spawn game thread and run OS event loop.
   let game_thread = thread::spawn(move || run(window, os_event_rx, os_input_sys, sim, gfx));
@@ -51,6 +59,28 @@ fn main() -> Result<()> {
     .unwrap_or_else(|e| panic!("Game thread paniced: {:?}", e))
     .with_context(|| "Game thread stopped with an error")?;
   Ok(())
+}
+
+fn init(sim: &mut Sim) -> Result<TextureDefBuilder> {
+  let mut texture_def_builder = TextureDefBuilder::new();
+  let tex1 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/dark.png"), Some(Components::Components4))?);
+  let tex2 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/light.png"), Some(Components::Components4))?);
+  let tex3 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
+
+  let world = &mut sim.world;
+  //let grid = sim.grid_sys.allocate_item();
+  let grid = world.insert((), vec![
+    (GridCoords::new(1.0, 1.0, 10.0), GridDynamics::new(0.0, 0.1, 0.0)),
+  ])[0];
+
+  world.insert((InGrid(grid), ), vec![
+    (InGridPosition::new(0, 0), InGridRotation::Up, InGridRender(tex1)),
+    (InGridPosition::new(-1, 0), InGridRotation::Right, InGridRender(tex2)),
+    (InGridPosition::new(0, 7), InGridRotation::Down, InGridRender(tex3)),
+    (InGridPosition::new(0, 8), InGridRotation::Left, InGridRender(tex3)),
+  ]);
+
+  Ok(texture_def_builder)
 }
 
 fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInputSys, mut sim: Sim, mut gfx: Gfx) -> Result<()> {
@@ -81,7 +111,7 @@ fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInpu
       }
     }
     // Render frame
-    gfx.render_frame(camera_input, tick_timer.extrapolation(), frame_time)?;
+    gfx.render_frame(&mut sim.world, camera_input, tick_timer.extrapolation(), frame_time)?;
   }
 
   Ok(gfx.wait_idle()?)

@@ -21,7 +21,6 @@ pub use crate::{
   allocator::{Allocator, BufferAllocation},
   descriptor_set::{self, DescriptorSetUpdateBuilder, WriteDescriptorSetBuilder},
   device::{Device, DeviceFeatures, DeviceFeaturesQuery, swapchain_extension::{Swapchain, SwapchainFeaturesQuery}},
-  entry::Entry,
   image::texture::Texture,
   instance::{debug_report_extension::DebugReport, Instance, InstanceFeatures, InstanceFeaturesQuery, surface_extension::Surface},
   presenter::Presenter,

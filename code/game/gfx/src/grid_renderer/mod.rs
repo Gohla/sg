@@ -1,10 +1,15 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::mem::size_of;
 
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use ash::vk;
-use ultraviolet::{Mat4, Vec2};
+use legion::world::World;
+use ultraviolet::{Mat4, Vec2, Vec3};
 
+use sim::{InGrid, InGridPosition, InGridRotation};
+use util::idx_assigner::Item;
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
 
@@ -12,7 +17,15 @@ use crate::texture_def::{TextureDef, TextureIdx};
 
 // Grid renderer component
 
-pub struct InGridRender(TextureIdx);
+#[repr(C)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+pub struct InGridRender(pub TextureIdx);
+
+// Grid chunks
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+struct InGridChunk { x: i8, y: i8 }
 
 // Grid renderer system
 
@@ -26,8 +39,11 @@ pub struct GridRendererSys {
 
   quads_vertex_buffer: BufferAllocation,
   quads_index_buffer: BufferAllocation,
-  quads_indices_count: usize,
 }
+
+const GRID_LENGTH: usize = 8;
+const GRID_LENGTH_I32: i32 = GRID_LENGTH as i32;
+const GRID_TILE_COUNT: usize = GRID_LENGTH * GRID_LENGTH;
 
 impl GridRendererSys {
   pub fn new(
@@ -45,8 +61,16 @@ impl GridRendererSys {
       let vert_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.vert.spv"))?;
       let frag_shader = device.create_shader_module(include_bytes!("../../../../../target/shader/grid_renderer/grid.frag.spv"))?;
 
-      let vertex_bindings = QuadsVertexData::bindings();
-      let vertex_attributes = QuadsVertexData::attributes();
+      let vertex_bindings = {
+        let mut vec = QuadsVertexData::bindings();
+        vec.extend(TextureUVVertexData::bindings());
+        vec
+      };
+      let vertex_attributes = {
+        let mut vec = QuadsVertexData::attributes();
+        vec.extend(TextureUVVertexData::attributes());
+        vec
+      };
 
       let pipeline = {
         let stages = &[
@@ -115,25 +139,21 @@ impl GridRendererSys {
       };
 
       // Create GPU buffers for immutable quad vertex and index data.
-      let quads_vertices = QuadsVertexData::create_vertices(8);
-      let quads_vertices_count = quads_vertices.len();
-      let quads_vertices_size = quads_vertices_count * size_of::<QuadsVertexData>();
-      let quads_indices = QuadsIndexData::create_indices(8);
-      let quads_indices_count = quads_indices.len();
-      let quads_indices_size = quads_indices_count * size_of::<QuadsIndexData>();
+      let quads_vertices = QuadsVertexData::create_vertices();
+      let quads_indices = QuadsIndexData::create_indices();
       let vertex_staging = allocator.create_staging_buffer_from_slice(&quads_vertices)?;
       let index_staging = allocator.create_staging_buffer_from_slice(&quads_indices)?;
-      let quads_vertex_buffer = allocator.create_gpu_vertex_buffer(quads_vertices_size)?;
-      let quads_index_buffer = allocator.create_gpu_index_buffer(quads_indices_size)?;
+      let quads_vertex_buffer = allocator.create_gpu_vertex_buffer(QuadsVertexData::vertices_size())?;
+      let quads_index_buffer = allocator.create_gpu_index_buffer(QuadsIndexData::indices_size())?;
       device.allocate_record_submit_wait(transient_command_pool, |command_buffer| {
         device.cmd_copy_buffer(command_buffer, vertex_staging.buffer, quads_vertex_buffer.buffer, &[
           BufferCopy::builder()
-            .size(quads_vertices_size as u64)
+            .size(QuadsVertexData::vertices_size() as u64)
             .build()
         ]);
         device.cmd_copy_buffer(command_buffer, index_staging.buffer, quads_index_buffer.buffer, &[
           BufferCopy::builder()
-            .size(quads_indices_size as u64)
+            .size(QuadsIndexData::indices_size() as u64)
             .build()
         ]);
         Ok(())
@@ -148,7 +168,6 @@ impl GridRendererSys {
         pipeline,
         quads_vertex_buffer,
         quads_index_buffer,
-        quads_indices_count,
       })
     }
   }
@@ -158,26 +177,79 @@ impl GridRendererSys {
     _device: &Device,
     _allocator: &Allocator,
   ) -> Result<GridRenderState> {
-    Ok(GridRenderState {})
+    Ok(GridRenderState { grids: HashMap::default() })
   }
 
   pub fn render(
     &self,
     device: &Device,
+    allocator: &Allocator,
+    command_buffer: CommandBuffer,
     texture_def: &TextureDef,
-    _render_state: &GridRenderState,
+    render_state: &mut GridRenderState,
+    world: &mut World,
     view_projection: Mat4,
-    command_buffer: CommandBuffer
-  ) {
-    let vertex_uniform_data = MVPUniformData { mvp: view_projection };
+  ) -> Result<()> {
+    use legion::borrow::Ref;
+    use legion::prelude::*;
+
+    // Update chunks of grid entities.
+    let entity_command_buffer = legion::command::CommandBuffer::default();
+    let chunk_query = Read::<InGridPosition>::query()
+      .filter(tag::<InGrid>() & component::<InGridRender>() & changed::<InGridPosition>());
+    for i in chunk_query.iter_entities_immutable(world) {
+      let (entity, pos): (_, Ref<InGridPosition>) = i;
+      let (x, y) = ((pos.x / GRID_LENGTH_I32) as i8, (pos.y / GRID_LENGTH_I32) as i8);
+      entity_command_buffer.add_tag(entity, InGridChunk { x, y })
+    }
+    entity_command_buffer.write(world);
+
+    // Update chunk buffers with texture UVs.
+    let update_query = <(Read<InGridPosition>, Read<InGridRotation>, Read<InGridRender>)>::query()
+      .filter(tag::<InGrid>() & tag::<InGridChunk>());
+    for chunk in update_query.iter_chunks_immutable(world) {
+      let in_grid: &InGrid = chunk.tag().unwrap();
+      let grid_chunk: &InGridChunk = chunk.tag().unwrap();
+      let buffer_allocation = match render_state.grids.entry((*in_grid, *grid_chunk)) {
+        Entry::Occupied(e) => {
+          e.into_mut()
+        },
+        Entry::Vacant(e) => {
+          let buffer_allocation = unsafe { allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())? };
+          e.insert(buffer_allocation)
+        },
+      };
+      let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer_allocation.info.get_mapped_data() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
+
+      let positions = chunk.components::<InGridPosition>().unwrap();
+      let rotations = chunk.components::<InGridRotation>().unwrap();
+      let renderers = chunk.components::<InGridRender>().unwrap();
+      for ((pos, _rot), render) in positions.iter().zip(rotations.iter()).zip(renderers.iter()) {
+        let texture_index = render.0.into_idx() as f32;
+        let slice_index = (pos.x / GRID_LENGTH_I32 + pos.y * GRID_LENGTH_I32) as usize;
+        buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
+        buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
+        buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
+        buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+      }
+    }
+
+    // Issue bind and draw commands.
     unsafe {
       device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
       device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
       device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
       device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
-      device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, vertex_uniform_data.as_bytes());
-      device.cmd_draw_indexed(command_buffer, self.quads_indices_count as u32, 1, 0, 0, 0);
+      for ((_in_grid, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
+        let mvp = view_projection.translated(&Vec3 { x: in_grid_chunk.x as f32 * 8.0, y: in_grid_chunk.y as f32 * 8.0, z: 0.0 });
+        let mvp_uniform_data = MVPUniformData(mvp);
+        device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
+        device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
+        device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);
+      }
     }
+
+    Ok(())
   }
 
   pub fn destroy(&mut self, device: &Device, allocator: &Allocator) {
@@ -194,7 +266,9 @@ impl GridRendererSys {
 
 // Render state
 
-pub struct GridRenderState {}
+pub struct GridRenderState {
+  grids: HashMap<(InGrid, InGridChunk), BufferAllocation>
+}
 
 impl GridRenderState {
   pub fn destroy(&self, _allocator: &Allocator) {}
@@ -206,6 +280,7 @@ impl GridRenderState {
 #[repr(C)]
 struct QuadsVertexData(Vec2);
 
+#[allow(dead_code)]
 impl QuadsVertexData {
   fn bindings() -> Vec<VertexInputBindingDescription> {
     vec![
@@ -228,11 +303,12 @@ impl QuadsVertexData {
     ]
   }
 
-  fn create_vertices(grid_length: u32) -> Vec<Self> {
-    let quad_count = grid_length * grid_length;
-    let vertices_count = quad_count * 4;
-    let mut vec = Vec::with_capacity(vertices_count as usize);
-    let half = grid_length as i32 / 2;
+
+  fn vertex_count() -> usize { GRID_TILE_COUNT * 4 }
+
+  fn create_vertices() -> Vec<Self> {
+    let mut vec = Vec::with_capacity(Self::vertex_count());
+    let half = GRID_LENGTH as i32 / 2;
     let half_neg = -half;
     for x in half_neg..half {
       let x = x as f32;
@@ -246,6 +322,8 @@ impl QuadsVertexData {
     }
     vec
   }
+
+  fn vertices_size() -> usize { Self::vertex_count() * size_of::<Self>() }
 }
 
 // Quads index data (GPU buffer, immutable)
@@ -254,13 +332,17 @@ impl QuadsVertexData {
 #[repr(C)]
 struct QuadsIndexData(u16);
 
+#[allow(dead_code)]
 impl QuadsIndexData {
   #[inline]
-  pub fn index_type() -> IndexType { IndexType::UINT16 }
+  fn index_type() -> IndexType { IndexType::UINT16 }
 
-  pub fn create_indices(grid_length: usize) -> Vec<QuadsIndexData> {
-    let mut vec = Vec::with_capacity(grid_length * grid_length * 6);
-    for i in 0..(grid_length * grid_length) as u16 {
+
+  fn index_count() -> usize { GRID_TILE_COUNT * 6 }
+
+  fn create_indices() -> Vec<QuadsIndexData> {
+    let mut vec = Vec::with_capacity(Self::index_count());
+    for i in 0..GRID_TILE_COUNT as u16 {
       vec.push(Self((i * 4) + 0));
       vec.push(Self((i * 4) + 1));
       vec.push(Self((i * 4) + 2));
@@ -270,6 +352,8 @@ impl QuadsIndexData {
     }
     vec
   }
+
+  fn indices_size() -> usize { Self::index_count() * size_of::<Self>() }
 }
 
 // Texture UV vertex data (CPU-GPU buffer, mutable)
@@ -277,12 +361,14 @@ impl QuadsIndexData {
 #[allow(dead_code)]
 #[repr(C)]
 struct TextureUVVertexData {
-  tex: Vec2,
+  u: f32,
+  v: f32,
+  i: f32,
 }
 
 #[allow(dead_code)]
 impl TextureUVVertexData {
-  pub fn bindings() -> Vec<VertexInputBindingDescription> {
+  fn bindings() -> Vec<VertexInputBindingDescription> {
     vec![
       VertexInputBindingDescription::builder()
         .binding(1)
@@ -292,20 +378,25 @@ impl TextureUVVertexData {
     ]
   }
 
-  pub fn attributes() -> Vec<VertexInputAttributeDescription> {
+  fn attributes() -> Vec<VertexInputAttributeDescription> {
     vec![
       VertexInputAttributeDescription::builder()
         .location(1)
-        .binding(0)
-        .format(Format::R32G32_SFLOAT)
+        .binding(1)
+        .format(Format::R32G32B32_SFLOAT)
         .offset(0)
         .build(),
     ]
   }
 
-  pub fn new(u: f32, v: f32) -> Self {
-    Self { tex: Vec2::new(u, v) }
+
+  fn new(u: f32, v: f32, i: f32) -> Self {
+    Self { u, v, i }
   }
+
+  fn uv_count() -> usize { GRID_TILE_COUNT * 4 }
+
+  fn uv_size() -> usize { Self::uv_count() * size_of::<Self>() }
 }
 
 
@@ -313,9 +404,8 @@ impl TextureUVVertexData {
 
 #[allow(dead_code)]
 #[repr(C)]
-struct MVPUniformData {
-  mvp: Mat4,
-}
+struct MVPUniformData(Mat4);
+
 
 impl MVPUniformData {
   pub fn push_constant_range() -> PushConstantRange {

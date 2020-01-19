@@ -23,7 +23,7 @@ pub trait Version: Default + Clone + Copy + PartialEq + Debug {
   fn wrapping_add(self, rhs: Self) -> Self;
 }
 
-pub trait Item<Idx: Index, Ver: Version>: Default + Clone + Copy + Debug {
+pub trait Item<Idx: Index = u32, Ver: Version = u32>: Default + Clone + Copy + Debug {
   fn new(index: Idx, version: Ver) -> Self;
 
   fn into_index(self) -> Idx;
@@ -34,7 +34,7 @@ pub trait Item<Idx: Index, Ver: Version>: Default + Clone + Copy + Debug {
 // Index allocator
 
 #[derive(Default)]
-pub struct IdxAllocator<Idx: Index, Ver: Version, I: Item<Idx, Ver>> {
+pub struct IdxAllocator<I: Item<Idx, Ver>, Idx: Index = u32, Ver: Version = u32> {
   slots: Vec<Ver>,
   num_slots: Idx,
   // Manually maintain number of slots as an u32 to prevent casting.
@@ -42,7 +42,7 @@ pub struct IdxAllocator<Idx: Index, Ver: Version, I: Item<Idx, Ver>> {
   _phantom: PhantomData<I>,
 }
 
-impl<Idx: Index, Ver: Version, I: Item<Idx, Ver>> IdxAllocator<Idx, Ver, I> {
+impl<I: Item<Idx, Ver>, Idx: Index, Ver: Version> IdxAllocator<I, Idx, Ver> {
   pub fn new() -> Self {
     debug_assert!(I::default().into_index().is_zero(), "BUG: index in default item '{:?}' is not zero", I::default());
     debug_assert_eq!(Ver::default(), I::default().into_version(), "BUG: version in default item '{:?}' is not the default", I::default());

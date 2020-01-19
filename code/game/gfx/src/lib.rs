@@ -5,12 +5,13 @@ use std::num::NonZeroU32;
 use anyhow::{Context, Result};
 use ash::vk::{self, ClearColorValue, ClearValue, CommandBuffer, DebugReportFlagsEXT, PipelineStageFlags, RenderPass};
 use byte_strings::c_str;
+use legion::world::World;
 use log::debug;
 use raw_window_handle::RawWindowHandle;
 
 use math::prelude::*;
-use util::image::{Components, ImageData};
 use util::timing::Duration;
+use vkw::entry::Entry;
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
 
@@ -54,6 +55,7 @@ impl Gfx {
     max_frames_in_flight: NonZeroU32,
     window: RawWindowHandle,
     initial_screen_size: ScreenSize,
+    texture_def_builder: TextureDefBuilder,
   ) -> Result<Gfx> {
     let entry = Entry::new()
       .with_context(|| "Failed to create VKW entry")?;
@@ -169,13 +171,7 @@ impl Gfx {
 
     let surface_change_handler = SurfaceChangeHandler::new();
 
-    let texture_def = {
-      let mut builder = TextureDefBuilder::new();
-      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/dark.png"), Some(Components::Components4))?);
-      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/light.png"), Some(Components::Components4))?);
-      builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
-      unsafe { builder.build(&device, &allocator, transient_command_pool) }?
-    };
+    let texture_def = unsafe { texture_def_builder.build(&device, &allocator, transient_command_pool)? };
 
     let camera_sys = CameraSys::new(initial_screen_size.physical);
     let grid_render_sys = GridRendererSys::new(&device, &allocator, &texture_def, max_frames_in_flight.get(), render_pass, pipeline_cache, transient_command_pool)
@@ -212,6 +208,7 @@ impl Gfx {
 
   pub fn render_frame(
     &mut self,
+    world: &mut World,
     camera_input: CameraInput,
     _extrapolation: f64,
     frame_time: Duration,
@@ -240,7 +237,11 @@ impl Gfx {
     let command_buffer = game_render_state.command_buffer;
 
     // Acquire swapchain image.
-    let swapchain_image_state = self.presenter.acquire_image_state(&self.swapchain, Some(render_state.image_acquired_semaphore), &mut self.surface_change_handler)
+    let swapchain_image_state = self.presenter.acquire_image_state(
+      &self.swapchain,
+      Some(render_state.image_acquired_semaphore),
+      &mut self.surface_change_handler
+    )
       .with_context(|| "Failed to acquire swapchain image state")?;
 
     unsafe {
@@ -248,9 +249,23 @@ impl Gfx {
       self.device.begin_command_buffer(command_buffer, true)
         .with_context(|| "Failed to begin command buffer")?;
       self.presenter.set_dynamic_state(&self.device, command_buffer, extent);
-      self.device.begin_render_pass(command_buffer, self.render_pass, swapchain_image_state.framebuffer, self.presenter.full_render_area(extent), &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]);
+      self.device.begin_render_pass(
+        command_buffer,
+        self.render_pass,
+        swapchain_image_state.framebuffer,
+        self.presenter.full_render_area(extent),
+        &[ClearValue { color: ClearColorValue { float32: [0.5, 0.5, 1.0, 1.0] } }]
+      );
 
-      self.grid_render_sys.render(&self.device, &self.texture_def, &game_render_state.grid_render_sys, self.camera_sys.view_projection_matrix(), command_buffer);
+      self.grid_render_sys.render(
+        &self.device,
+        &self.allocator,
+        command_buffer,
+        &self.texture_def,
+        &mut game_render_state.grid_render_sys,
+        world,
+        self.camera_sys.view_projection_matrix(),
+      )?;
 
       // Done recording primary command buffer.
       self.device.end_render_pass(command_buffer);
@@ -268,7 +283,13 @@ impl Gfx {
     }
 
     // Present: take rendered swapchain image and present to the user.
-    self.presenter.present(&self.device, &self.swapchain, swapchain_image_state, &[render_state.render_complete_semaphore], &mut self.surface_change_handler)
+    self.presenter.present(
+      &self.device,
+      &self.swapchain,
+      swapchain_image_state,
+      &[render_state.render_complete_semaphore],
+      &mut self.surface_change_handler
+    )
       .with_context(|| "Failed to present")?;
 
     Ok(())
