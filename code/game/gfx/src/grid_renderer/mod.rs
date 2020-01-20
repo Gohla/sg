@@ -213,24 +213,29 @@ impl GridRendererSys {
       let buffer_allocation = match render_state.grids.entry((*in_grid, *grid_chunk)) {
         Entry::Occupied(e) => {
           e.into_mut()
-        },
+        }
         Entry::Vacant(e) => {
-          let buffer_allocation = unsafe { allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())? };
+          let buffer_allocation = unsafe { allocator.create_cpugpu_vertex_buffer(TextureUVVertexData::uv_size())? };
           e.insert(buffer_allocation)
-        },
+        }
       };
-      let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer_allocation.info.get_mapped_data() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
 
-      let positions = chunk.components::<InGridPosition>().unwrap();
-      let rotations = chunk.components::<InGridRotation>().unwrap();
-      let renderers = chunk.components::<InGridRender>().unwrap();
-      for ((pos, _rot), render) in positions.iter().zip(rotations.iter()).zip(renderers.iter()) {
-        let texture_index = render.0.into_idx() as f32;
-        let slice_index = (pos.x / GRID_LENGTH_I32 + pos.y * GRID_LENGTH_I32) as usize;
-        buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
-        buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
-        buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
-        buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+      {
+        let map = unsafe { buffer_allocation.map(allocator)? };
+        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(map.ptr() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
+        let positions = chunk.components::<InGridPosition>().unwrap();
+        let rotations = chunk.components::<InGridRotation>().unwrap();
+        let renderers = chunk.components::<InGridRender>().unwrap();
+        for ((pos, _rot), render) in positions.iter().zip(rotations.iter()).zip(renderers.iter()) {
+          let texture_index = render.0.into_idx() as f32;
+          let (x,y) = dbg!((pos.x % GRID_LENGTH_I32, pos.y % GRID_LENGTH_I32)); // TODO: positions can be negative, have to deal with that.
+          let slice_index = dbg!(((x / GRID_LENGTH_I32) + (y * GRID_LENGTH_I32) * 4)) as usize;
+          buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
+          buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
+          buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
+          buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+        }
+        allocator.flush_allocation(&buffer_allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
       }
     }
 
@@ -241,8 +246,8 @@ impl GridRendererSys {
       device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
       device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
       for ((_in_grid, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
-        let mvp = view_projection.translated(&Vec3 { x: in_grid_chunk.x as f32 * 8.0, y: in_grid_chunk.y as f32 * 8.0, z: 0.0 });
-        let mvp_uniform_data = MVPUniformData(mvp);
+        let model = Mat4::from_translation(Vec3 { x: in_grid_chunk.x as f32 * 8.0, y: in_grid_chunk.y as f32 * 8.0, z: 0.0 });
+        let mvp_uniform_data = MVPUniformData(view_projection * model);
         device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
         device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
         device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);

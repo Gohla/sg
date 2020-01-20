@@ -209,6 +209,9 @@ pub struct MappedMemory<'a> {
 
 impl MappedMemory<'_> {
   #[inline]
+  pub fn ptr(&self) -> *mut u8 { self.ptr }
+
+  #[inline]
   pub unsafe fn copy_from<T>(&self, src: &T) {
     let src = src as *const T;
     self.copy_from_ptr(src, 1);
