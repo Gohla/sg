@@ -95,7 +95,7 @@ impl GridRendererSys {
           .depth_clamp_enable(false)
           .rasterizer_discard_enable(false)
           .polygon_mode(PolygonMode::FILL)
-          .cull_mode(CullModeFlags::NONE)
+          .cull_mode(CullModeFlags::NONE) // TODO: enable culling
           .front_face(FrontFace::COUNTER_CLOCKWISE)
           .line_width(1.0)
           ;
@@ -228,8 +228,8 @@ impl GridRendererSys {
         let renderers = chunk.components::<InGridRender>().unwrap();
         for ((pos, _rot), render) in positions.iter().zip(rotations.iter()).zip(renderers.iter()) {
           let texture_index = render.0.into_idx() as f32;
-          let (x,y) = dbg!((pos.x % GRID_LENGTH_I32, pos.y % GRID_LENGTH_I32)); // TODO: positions can be negative, have to deal with that.
-          let slice_index = dbg!(((x / GRID_LENGTH_I32) + (y * GRID_LENGTH_I32) * 4)) as usize;
+          let (x,y) = (pos.x % GRID_LENGTH_I32, pos.y % GRID_LENGTH_I32); // TODO: positions can be negative, have to deal with that.
+          let slice_index = ((x / GRID_LENGTH_I32) + (y * GRID_LENGTH_I32) * 4) as usize;
           buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
           buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
           buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);

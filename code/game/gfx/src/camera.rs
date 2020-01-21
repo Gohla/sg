@@ -23,7 +23,8 @@ impl CameraSys {
 
   pub fn with_speeds(viewport: PhysicalSize, pan_speed: f32, mag_speed: f32) -> CameraSys {
     CameraSys {
-      position: Vec3::zero(),
+      // TODO: why is z 1.0? Shouldn't Z be -1.0, since 1.0 z is going INTO the screen? Is it because the view transformation is applied BEFORE the projection transformation, which flips the Z around?
+      position: Vec3::new(0.0, 0.0, 1.0),
       zoom: 1.0,
       pan_speed,
       mag_speed,
@@ -96,8 +97,8 @@ impl CameraSys {
 
     let (width, height): (f32, f32) = self.viewport.into();
 
+    // TODO: fix mouse dragging.
     if input.drag {
-      // Move the camera
       let mouse_pos = Vec2::new(input.drag_pos.x as f32, input.drag_pos.y as f32);
       if self.last_mouse_pos.is_none() {
         self.last_mouse_pos = Some(mouse_pos);
@@ -109,25 +110,14 @@ impl CameraSys {
       self.last_mouse_pos = None;
     }
 
-    let view = {
-      let dir = Vec3::unit_z();
-      let right = Vec3::unit_y().cross(dir).normalized();
-      let up = dir.cross(right);
-      let view = Mat4::from([
-        right.x, up.x, dir.x, 0.0,
-        right.y, up.y, dir.y, 0.0,
-        right.z, up.z, dir.z, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-      ]) * Mat4::from([
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        -self.position.x, -self.position.y, -10.0, 1.0,
-      ]);
-      view
-    };
+    // View matrix.
+    let view = Mat4::look_at_lh(
+      Vec3::new(self.position.x, self.position.y, self.position.z),
+      Vec3::new(self.position.x, self.position.y, 0.0),
+      Vec3::unit_y()
+    );
 
-    // Orthographic (zoomable) projection
+    // Orthographic (zoomable) projection matrix.
     let proj = {
       let aspect_ratio = width / height;
       let min_x = aspect_ratio * self.zoom / -2.0;
@@ -142,16 +132,7 @@ impl CameraSys {
       )
     };
 
-    // Clip matrix to 'fix' Vulkan's co-ordinate space: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
-    let clip = Mat4::from([
-      1.0, 0.0, 0.0, 0.0,
-      0.0, -1.0, 0.0, 0.0,
-      0.0, 0.0, 0.5, 0.0,
-      0.0, 0.0, 0.5, 1.0,
-    ]);
-
-    let view_proj = clip * proj * view;
-
+    let view_proj = proj * view;
     self.view_proj = view_proj;
     self.view_proj_inverse = view_proj.inversed();
   }
