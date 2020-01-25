@@ -3,8 +3,7 @@ use legion::prelude::*;
 
 use util::timing::Duration;
 
-use crate::{GridCoords, GridDynamics};
-
+use crate::{WorldDynamics, WorldTransform};
 
 pub struct Sim {
   pub world: World,
@@ -17,11 +16,11 @@ impl Sim {
   }
 
   pub fn simulate(&mut self, _time_step: Duration) {
-    let dynamics_query = <(Write<GridCoords>, Read<GridDynamics>)>::query();
-    for i in dynamics_query.iter(&mut self.world) {
-      let (mut coords, dynamics): (RefMut<GridCoords>, Ref<GridDynamics>) = i;
-      coords.position += dynamics.linear_velocity;
-      coords.rotation += dynamics.angular_velocity;
+    let dynamics_query = <(Read<WorldDynamics>, Write<WorldTransform>)>::query();
+    for i in dynamics_query.iter_mut(&mut self.world) {
+      let (dynamics, mut transform): (Ref<WorldDynamics>, RefMut<WorldTransform>) = i;
+      transform.position += dynamics.linear_velocity;
+      transform.orientation += dynamics.angular_velocity;
     }
   }
 }

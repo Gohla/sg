@@ -7,14 +7,14 @@ use winit::event::VirtualKeyCode;
 
 use gfx::camera::CameraInput;
 use gfx::Gfx;
-use gfx::grid_renderer::InGridRender;
+use gfx::grid_renderer::GridTileRender;
 use gfx::texture_def::TextureDefBuilder;
 use math::prelude::*;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::{OsInputSys, RawInput};
 use os::window::Window;
-use sim::{GridCoords, GridDynamics, InGrid, InGridPosition, InGridRotation};
+use sim::{WorldTransform, WorldDynamics, InGrid, GridPosition, GridOrientation};
 use sim::legion_sim::Sim;
 use util::image::{Components, ImageData};
 use util::timing::Duration;
@@ -68,16 +68,17 @@ fn init(sim: &mut Sim) -> Result<TextureDefBuilder> {
   let tex3 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
 
   let world = &mut sim.world;
-  //let grid = sim.grid_sys.allocate_item();
   let grid = world.insert((), vec![
-    (GridCoords::new(1.0, 1.0, 10.0), GridDynamics::new(0.0, 0.1, 0.0)),
+    (WorldTransform::new(0.0, 0.0, 0.0), WorldDynamics::new(0.0, 0.0, 0.0)),
   ])[0];
 
-  world.insert((InGrid(grid), ), vec![
-    (InGridPosition::new(0, 0), InGridRotation::Up, InGridRender(tex1)),
-    (InGridPosition::new(-1, 0), InGridRotation::Right, InGridRender(tex2)),
-    (InGridPosition::new(0, 7), InGridRotation::Down, InGridRender(tex3)),
-    (InGridPosition::new(0, 8), InGridRotation::Left, InGridRender(tex3)),
+  world.insert((InGrid::new(grid), ), vec![
+    (GridPosition::new(0, 0), GridOrientation::default(), GridTileRender(tex1)),
+    //(GridPosition::new(-1, 0), GridOrientation::default(), GridTileRender(tex1)),
+    //(GridPosition::new(0, -1), GridOrientation::default(), GridTileRender(tex1)),
+    //(GridPosition::new(-1, -1), GridOrientation::default(), GridTileRender(tex1)),
+    //(GridPosition::new(0, 7), GridOrientation::default(), GridTileRender(tex2)),
+    //(GridPosition::new(0, 8), GridOrientation::default(), GridTileRender(tex3)),
   ]);
 
   Ok(texture_def_builder)

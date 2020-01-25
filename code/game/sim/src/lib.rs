@@ -3,49 +3,72 @@ use ultraviolet::{Rotor2, Vec2};
 
 pub mod legion_sim;
 
-// Grid components.
+// World-space components.
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug)]
-pub struct GridCoords {
+/// Component indicating the transform of an entity in world-space.
+pub struct WorldTransform {
   pub position: Vec2,
-  pub rotation: Rotor2
+  pub orientation: Rotor2
 }
 
-impl GridCoords {
-  pub fn new(x: f32, y: f32, a: f32) -> Self { Self { position: Vec2::new(x, y), rotation: Rotor2::from_angle(a) } }
+impl WorldTransform {
+  #[inline]
+  pub fn new(x: f32, y: f32, angle: f32) -> Self { Self { position: Vec2::new(x, y), orientation: Rotor2::from_angle(angle) } }
 }
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug)]
-pub struct GridDynamics {
+/// Component indicating the dynamics of an entity in world-space.
+pub struct WorldDynamics {
   pub linear_velocity: Vec2,
   pub angular_velocity: Rotor2,
 }
 
-impl GridDynamics {
-  pub fn new(x: f32, y: f32, a: f32) -> Self { Self { linear_velocity: Vec2::new(x, y), angular_velocity: Rotor2::from_angle(a) } }
+impl WorldDynamics {
+  #[inline]
+  pub fn new(x: f32, y: f32, angle: f32) -> Self { Self { linear_velocity: Vec2::new(x, y), angular_velocity: Rotor2::from_angle(angle) } }
 }
 
-// Inside-of grid components.
+// Grid-space components.
 
 #[repr(C)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct InGrid(pub Entity);
+/// Component indicating that an entity is inside a grid. Typically used as a tag.
+pub struct InGrid { pub grid: Entity }
 
-#[repr(C)]
-#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct InGridPosition { pub x: i32, pub y: i32 }
-
-impl InGridPosition {
-  pub fn new(x: i32, y: i32) -> Self { Self { x, y } }
+impl InGrid {
+  #[inline]
+  pub fn new(grid: Entity) -> Self { Self { grid } }
 }
 
 #[repr(C)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+/// Component indicating the position of an entity in grid-space. Grid of the entity is determined by [InGrid].
+pub struct GridPosition {
+  pub x: i32,
+  pub y: i32,
+}
+
+impl GridPosition {
+  #[inline]
+  pub fn new(x: i32, y: i32) -> Self { Self { x, y } }
+}
+
+// Grid-space helpers.
+
+#[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub enum InGridRotation {
+/// Component indicating the orientation of an entity in grid-space. Grid of the entity is determined by [InGrid].
+pub enum GridOrientation {
   Up,
   Right,
   Down,
-  Left
+  Left,
+}
+
+impl Default for GridOrientation {
+  #[inline]
+  fn default() -> Self { GridOrientation::Up }
 }

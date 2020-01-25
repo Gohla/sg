@@ -5,27 +5,61 @@ use std::mem::size_of;
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use ash::vk;
+use itertools::izip;
 use legion::world::World;
 use ultraviolet::{Mat4, Vec2, Vec3};
 
-use sim::{InGrid, InGridPosition, InGridRotation};
+use sim::{GridOrientation, GridPosition, InGrid};
 use util::idx_assigner::Item;
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
 
 use crate::texture_def::{TextureDef, TextureIdx};
 
+// Grid length/count constants
+
+const GRID_LENGTH: usize = 16;
+const GRID_LENGTH_I32: i32 = GRID_LENGTH as i32;
+const GRID_LENGTH_F32: f32 = GRID_LENGTH as f32;
+const GRID_TILE_COUNT: usize = GRID_LENGTH * GRID_LENGTH;
+
 // Grid renderer component
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
-pub struct InGridRender(pub TextureIdx);
+/// Component indicating how to render an entity in grid-space. Grid of the entity is determined by [InGrid], grid-space
+/// position by [GridPosition], and grid-space orientation by [GridOrientation].
+pub struct GridTileRender(pub TextureIdx);
 
 // Grid chunks
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+/// Component indicating that an entity is inside grid chunk at [x], [y]. Used internally only.
 struct InGridChunk { x: i8, y: i8 }
+
+impl InGridChunk {
+  #[inline]
+  pub fn from_grid_position(grid_position: &GridPosition) -> Self {
+    let x = grid_position.x.div_euclid(GRID_LENGTH_I32) as i8;
+    let y = grid_position.y.div_euclid(GRID_LENGTH_I32) as i8;
+    Self { x, y }
+  }
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
+/// Component indicating the index of an entity in grid-chunk-space. Used internally only.
+struct GridChunkIndex(u8);
+
+impl GridChunkIndex {
+  #[inline]
+  pub fn from_grid_position(grid_position: &GridPosition) -> Self {
+    let idx_x = grid_position.x.rem_euclid(GRID_LENGTH_I32) as u8;
+    let idx_y = (grid_position.y.rem_euclid(GRID_LENGTH_I32) * GRID_LENGTH_I32) as u8;
+    Self(idx_x + idx_y)
+  }
+}
 
 // Grid renderer system
 
@@ -40,10 +74,6 @@ pub struct GridRendererSys {
   quads_vertex_buffer: BufferAllocation,
   quads_index_buffer: BufferAllocation,
 }
-
-const GRID_LENGTH: usize = 8;
-const GRID_LENGTH_I32: i32 = GRID_LENGTH as i32;
-const GRID_TILE_COUNT: usize = GRID_LENGTH * GRID_LENGTH;
 
 impl GridRendererSys {
   pub fn new(
@@ -193,21 +223,27 @@ impl GridRendererSys {
     use legion::borrow::Ref;
     use legion::prelude::*;
 
-    // Update chunks of grid entities.
-    let entity_command_buffer = legion::command::CommandBuffer::default();
-    let chunk_query = Read::<InGridPosition>::query()
-      .filter(tag::<InGrid>() & component::<InGridRender>() & changed::<InGridPosition>());
-    for i in chunk_query.iter_entities_immutable(world) {
-      let (entity, pos): (_, Ref<InGridPosition>) = i;
-      let (x, y) = ((pos.x / GRID_LENGTH_I32) as i8, (pos.y / GRID_LENGTH_I32) as i8);
-      entity_command_buffer.add_tag(entity, InGridChunk { x, y })
+    // Set chunk tags of grid tile entities, and set their index in grid-chunk-space.
+    let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
+    // OPTO: reuse query such that changed filter works?
+    let chunk_query = Read::<GridPosition>::query()
+      .filter(tag::<InGrid>() & component::<GridTileRender>() & changed::<GridPosition>());
+    for i in chunk_query.iter_entities(world) {
+      let (entity, pos): (_, Ref<GridPosition>) = i;
+      let in_grid_chunk = InGridChunk::from_grid_position(&pos);
+      // OPTO: initialize grid tile entities with an InGridChunk tag to prevent copy into new archetype chunk.
+      entity_command_buffer.add_tag(entity, in_grid_chunk);
+      let grid_chunk_position = GridChunkIndex::from_grid_position(&pos);
+      // OPTO: initialize grid tile entities with a GridChunkPosition component to prevent copy into new archetype chunk.
+      entity_command_buffer.add_component(entity, grid_chunk_position);
     }
     entity_command_buffer.write(world);
 
     // Update chunk buffers with texture UVs.
-    let update_query = <(Read<InGridPosition>, Read<InGridRotation>, Read<InGridRender>)>::query()
+    // OPTO: reuse query?
+    let update_query = <(Read<GridChunkIndex>, Read<GridOrientation>, Read<GridTileRender>)>::query()
       .filter(tag::<InGrid>() & tag::<InGridChunk>());
-    for chunk in update_query.iter_chunks_immutable(world) {
+    for chunk in update_query.iter_chunks(world) {
       let in_grid: &InGrid = chunk.tag().unwrap();
       let grid_chunk: &InGridChunk = chunk.tag().unwrap();
       let buffer_allocation = match render_state.grids.entry((*in_grid, *grid_chunk)) {
@@ -215,21 +251,24 @@ impl GridRendererSys {
           e.into_mut()
         }
         Entry::Vacant(e) => {
-          let buffer_allocation = unsafe { allocator.create_cpugpu_vertex_buffer(TextureUVVertexData::uv_size())? };
+          let buffer_allocation = unsafe {
+            let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
+            allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
+            allocation
+          };
           e.insert(buffer_allocation)
         }
       };
 
       {
-        let map = unsafe { buffer_allocation.map(allocator)? };
-        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(map.ptr() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
-        let positions = chunk.components::<InGridPosition>().unwrap();
-        let rotations = chunk.components::<InGridRotation>().unwrap();
-        let renderers = chunk.components::<InGridRender>().unwrap();
-        for ((pos, _rot), render) in positions.iter().zip(rotations.iter()).zip(renderers.iter()) {
+        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer_allocation.info.get_mapped_data() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
+        let indices = chunk.components::<GridChunkIndex>().unwrap();
+        let orientations = chunk.components::<GridOrientation>().unwrap();
+        let renderers = chunk.components::<GridTileRender>().unwrap();
+        for (index, _orientation, render) in izip!(indices.iter(), orientations.iter(), renderers.iter()) {
           let texture_index = render.0.into_idx() as f32;
-          let (x,y) = (pos.x % GRID_LENGTH_I32, pos.y % GRID_LENGTH_I32); // TODO: positions can be negative, have to deal with that.
-          let slice_index = ((x / GRID_LENGTH_I32) + (y * GRID_LENGTH_I32) * 4) as usize;
+          let slice_index = index.0 as usize * 4;
+          // OPTO: use memcpy?
           buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
           buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
           buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
@@ -246,7 +285,7 @@ impl GridRendererSys {
       device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
       device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
       for ((_in_grid, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
-        let model = Mat4::from_translation(Vec3 { x: in_grid_chunk.x as f32 * 8.0, y: in_grid_chunk.y as f32 * 8.0, z: 0.0 });
+        let model = Mat4::from_translation(Vec3 { x: in_grid_chunk.x as f32 * GRID_LENGTH_F32, y: in_grid_chunk.y as f32 * GRID_LENGTH_F32, z: 0.0 });
         let mvp_uniform_data = MVPUniformData(view_projection * model);
         device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
         device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
@@ -313,12 +352,10 @@ impl QuadsVertexData {
 
   fn create_vertices() -> Vec<Self> {
     let mut vec = Vec::with_capacity(Self::vertex_count());
-    let half = GRID_LENGTH as i32 / 2;
-    let half_neg = -half;
-    for x in half_neg..half {
-      let x = x as f32;
-      for y in half_neg..half {
-        let y = y as f32;
+    for y in 0..GRID_LENGTH {
+      let y = y as f32;
+      for x in 0..GRID_LENGTH {
+        let x = x as f32;
         vec.push(Self(Vec2::new(x - 0.5, y - 0.5)));
         vec.push(Self(Vec2::new(x + 0.5, y - 0.5)));
         vec.push(Self(Vec2::new(x - 0.5, y + 0.5)));

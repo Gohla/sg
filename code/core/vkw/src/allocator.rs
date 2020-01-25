@@ -211,6 +211,10 @@ impl MappedMemory<'_> {
   #[inline]
   pub fn ptr(&self) -> *mut u8 { self.ptr }
 
+  pub unsafe fn copy_zeroes(&self, count: usize) {
+    std::ptr::write_bytes(self.ptr, 0, count);
+  }
+
   #[inline]
   pub unsafe fn copy_from<T>(&self, src: &T) {
     let src = src as *const T;
@@ -242,9 +246,6 @@ impl MappedMemory<'_> {
   pub unsafe fn copy_from_bytes_offset_ptr(&self, src: *const u8, dst_offset: isize, count: usize) {
     std::ptr::copy_nonoverlapping(src, self.ptr.offset(dst_offset), count);
   }
-
-  #[inline]
-  pub unsafe fn unmap(self) { /* Just drops self */ }
 }
 
 impl BufferAllocation {
