@@ -12,7 +12,8 @@ members = [
 ]
 
 [patch.crates-io]
-legion = { git = "https://github.com/TomGillen/legion.git", branch = "master" }
+#legion = { git = "https://github.com/TomGillen/legion.git", branch = "master" }
+legion = { git = "https://github.com/Veykril/legion.git", branch = "typed_indices" }
 
 # Development (builtin & default) profile: debug assertions + fastest code generation.
 [profile.dev]

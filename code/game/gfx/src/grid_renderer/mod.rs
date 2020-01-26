@@ -227,7 +227,7 @@ impl GridRendererSys {
     let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
     // OPTO: reuse query such that changed filter works?
     let chunk_query = Read::<GridPosition>::query()
-      .filter(tag::<InGrid>() & component::<GridTileRender>() & changed::<GridPosition>());
+      .filter(tag::<InGrid>() & component::<GridTileRender>());
     for i in chunk_query.iter_entities(world) {
       let (entity, pos): (_, Ref<GridPosition>) = i;
       let in_grid_chunk = InGridChunk::from_grid_position(&pos);
@@ -254,11 +254,13 @@ impl GridRendererSys {
           let buffer_allocation = unsafe {
             let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
             allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
+            allocator.flush_allocation(&allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
             allocation
           };
           e.insert(buffer_allocation)
         }
       };
+
 
       {
         let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer_allocation.info.get_mapped_data() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
@@ -284,8 +286,9 @@ impl GridRendererSys {
       device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
       device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
       device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
-      for ((_in_grid, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
-        let model = Mat4::from_translation(Vec3 { x: in_grid_chunk.x as f32 * GRID_LENGTH_F32, y: in_grid_chunk.y as f32 * GRID_LENGTH_F32, z: 0.0 });
+      for ((_, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
+        let trans = Vec3 { x: in_grid_chunk.x as f32 * GRID_LENGTH_F32, y: in_grid_chunk.y as f32 * GRID_LENGTH_F32, z: 0.0 };
+        let model = Mat4::from_translation(trans);
         let mvp_uniform_data = MVPUniformData(view_projection * model);
         device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
         device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
@@ -315,13 +318,18 @@ pub struct GridRenderState {
 }
 
 impl GridRenderState {
-  pub fn destroy(&self, _allocator: &Allocator) {}
+  pub fn destroy(&self, allocator: &Allocator) {
+    for buffer_allocation in self.grids.values() {
+      unsafe { buffer_allocation.destroy(allocator) };
+    }
+  }
 }
 
 // Quads vertex data (GPU buffer, immutable)
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
 struct QuadsVertexData(Vec2);
 
 #[allow(dead_code)]
@@ -372,6 +380,7 @@ impl QuadsVertexData {
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
 struct QuadsIndexData(u16);
 
 #[allow(dead_code)]
@@ -402,6 +411,7 @@ impl QuadsIndexData {
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
 struct TextureUVVertexData {
   u: f32,
   v: f32,
@@ -446,6 +456,7 @@ impl TextureUVVertexData {
 
 #[allow(dead_code)]
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
 struct MVPUniformData(Mat4);
 
 

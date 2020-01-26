@@ -3,6 +3,7 @@ use std::sync::mpsc::Receiver;
 use std::thread;
 
 use anyhow::{Context, Result};
+use log::debug;
 use winit::event::VirtualKeyCode;
 
 use gfx::camera::CameraInput;
@@ -14,12 +15,13 @@ use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::{OsInputSys, RawInput};
 use os::window::Window;
-use sim::{WorldTransform, WorldDynamics, InGrid, GridPosition, GridOrientation};
+use sim::{GridOrientation, GridPosition, InGrid, WorldDynamics, WorldTransform};
 use sim::legion_sim::Sim;
 use util::image::{Components, ImageData};
 use util::timing::Duration;
 
 use crate::timing::{FrameTime, FrameTimer, TickTimer};
+use ultraviolet::Vec3;
 
 pub mod timing;
 
@@ -30,7 +32,7 @@ fn main() -> Result<()> {
   // OS context, window, and event handling.
   let mut os_context = OsContext::new();
   let window = {
-    let window_min_size = LogicalSize::new(800.0, 600.0);
+    let window_min_size = LogicalSize::new(1920.0, 1080.0);
     Window::new(&os_context, window_min_size, window_min_size, "SG")
       .with_context(|| "Failed to create window")?
   };
@@ -41,27 +43,36 @@ fn main() -> Result<()> {
   };
   // Initialize simulation.
   let mut sim = Sim::new();
-  // Initialize game.
-  let texture_def_builder = init(&mut sim)
+  let texture_def_builder = init_sim(&mut sim)
     .with_context(|| "Failed to initialize game")?;
   // Initialize graphics.
-  let gfx = Gfx::new(
+  let mut gfx = Gfx::new(
     cfg!(debug_assertions),
     NonZeroU32::new(2).unwrap(),
     window.winit_raw_window_handle(),
     window.window_inner_size(),
     texture_def_builder,
   ).with_context(|| "Failed to create GFX instance")?;
+  init_gfx(&mut gfx);
   // Spawn game thread and run OS event loop.
-  let game_thread = thread::spawn(move || run(window, os_event_rx, os_input_sys, sim, gfx));
+  let game_thread = thread::Builder::new()
+    .name("Game".to_string())
+    .spawn(move || {
+      debug!("Game thread started");
+      run(window, os_event_rx, os_input_sys, sim, gfx)
+        .with_context(|| "Game thread stopped with an error").unwrap();
+      debug!("Game thread stopped");
+    })
+    .with_context(|| "Failed to create game thread")?;
+  debug!("Main thread OS-event loop started");
   os_event_sys.run_return(&mut os_context);
+  debug!("Main thread OS-event loop stopped");
   game_thread.join()
-    .unwrap_or_else(|e| panic!("Game thread paniced: {:?}", e))
-    .with_context(|| "Game thread stopped with an error")?;
+    .unwrap_or_else(|e| panic!("Game thread paniced: {:?}", e));
   Ok(())
 }
 
-fn init(sim: &mut Sim) -> Result<TextureDefBuilder> {
+fn init_sim(sim: &mut Sim) -> Result<TextureDefBuilder> {
   let mut texture_def_builder = TextureDefBuilder::new();
   let tex1 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/dark.png"), Some(Components::Components4))?);
   let tex2 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/light.png"), Some(Components::Components4))?);
@@ -74,14 +85,19 @@ fn init(sim: &mut Sim) -> Result<TextureDefBuilder> {
 
   world.insert((InGrid::new(grid), ), vec![
     (GridPosition::new(0, 0), GridOrientation::default(), GridTileRender(tex1)),
-    //(GridPosition::new(-1, 0), GridOrientation::default(), GridTileRender(tex1)),
-    //(GridPosition::new(0, -1), GridOrientation::default(), GridTileRender(tex1)),
-    //(GridPosition::new(-1, -1), GridOrientation::default(), GridTileRender(tex1)),
-    //(GridPosition::new(0, 7), GridOrientation::default(), GridTileRender(tex2)),
-    //(GridPosition::new(0, 8), GridOrientation::default(), GridTileRender(tex3)),
+    (GridPosition::new(-1, 0), GridOrientation::default(), GridTileRender(tex2)),
+    (GridPosition::new(0, -1), GridOrientation::default(), GridTileRender(tex1)),
+    (GridPosition::new(-1, -1), GridOrientation::default(), GridTileRender(tex1)),
+    (GridPosition::new(0, 7), GridOrientation::default(), GridTileRender(tex2)),
+    (GridPosition::new(0, 8), GridOrientation::default(), GridTileRender(tex3)),
   ]);
 
   Ok(texture_def_builder)
+}
+
+fn init_gfx(gfx: &mut Gfx) {
+  gfx.camera_sys.set_position(Vec3::new(-0.5, -0.5, 1.0));
+  gfx.camera_sys.set_zoom(33.0);
 }
 
 fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInputSys, mut sim: Sim, mut gfx: Gfx) -> Result<()> {
