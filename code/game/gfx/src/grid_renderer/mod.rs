@@ -7,9 +7,9 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use itertools::izip;
 use legion::world::World;
-use ultraviolet::{Mat4, Vec2, Vec3};
+use ultraviolet::{Mat4, Vec2};
 
-use sim::{GridOrientation, GridPosition, InGrid};
+use sim::prelude::*;
 use util::idx_assigner::Item;
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
@@ -207,7 +207,7 @@ impl GridRendererSys {
     _device: &Device,
     _allocator: &Allocator,
   ) -> Result<GridRenderState> {
-    Ok(GridRenderState { grids: HashMap::default() })
+    Ok(GridRenderState::new())
   }
 
   pub fn render(
@@ -222,6 +222,14 @@ impl GridRendererSys {
   ) -> Result<()> {
     use legion::borrow::Ref;
     use legion::prelude::*;
+
+    // Update grid transforms
+    let grid_transform_query = Read::<WorldTransform>::query()
+      .filter(tag::<Grid>());
+    for i in grid_transform_query.iter_entities(world) {
+      let (entity, transform): (_, Ref<WorldTransform>) = i;
+      render_state.grid_transforms.insert(entity, *transform);
+    }
 
     // Set chunk tags of grid tile entities, and set their index in grid-chunk-space.
     let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
@@ -246,7 +254,7 @@ impl GridRendererSys {
     for chunk in update_query.iter_chunks(world) {
       let in_grid: &InGrid = chunk.tag().unwrap();
       let grid_chunk: &InGridChunk = chunk.tag().unwrap();
-      let buffer_allocation = match render_state.grids.entry((*in_grid, *grid_chunk)) {
+      let buffer_allocation = match render_state.grid_uv_buffers.entry((*in_grid, *grid_chunk)) {
         Entry::Occupied(e) => {
           e.into_mut()
         }
@@ -286,13 +294,16 @@ impl GridRendererSys {
       device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
       device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
       device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
-      for ((_, in_grid_chunk), buffer_allocation) in render_state.grids.iter() {
-        let trans = Vec3 { x: in_grid_chunk.x as f32 * GRID_LENGTH_F32, y: in_grid_chunk.y as f32 * GRID_LENGTH_F32, z: 0.0 };
-        let model = Mat4::from_translation(trans);
-        let mvp_uniform_data = MVPUniformData(view_projection * model);
-        device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
-        device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
-        device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);
+      for ((in_grid, in_grid_chunk), buffer_allocation) in render_state.grid_uv_buffers.iter() {
+        if let Some(world_transform) = render_state.grid_transforms.get(&in_grid.grid) {
+          let mut isometry = world_transform.isometry;
+          isometry.prepend_translation(Vec2::new(in_grid_chunk.x as f32 * GRID_LENGTH_F32, in_grid_chunk.y as f32 * GRID_LENGTH_F32));
+          let model = Mat4::from_translation(isometry.translation.into_homogeneous_vector()) * isometry.rotation.into_matrix().into_homogeneous().into_homogeneous();
+          let mvp_uniform_data = MVPUniformData(view_projection * model);
+          device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
+          device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
+          device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);
+        }
       }
     }
 
@@ -314,12 +325,20 @@ impl GridRendererSys {
 // Render state
 
 pub struct GridRenderState {
-  grids: HashMap<(InGrid, InGridChunk), BufferAllocation>
+  grid_transforms: HashMap<Entity, WorldTransform>,
+  grid_uv_buffers: HashMap<(InGrid, InGridChunk), BufferAllocation>,
 }
 
 impl GridRenderState {
-  pub fn destroy(&self, allocator: &Allocator) {
-    for buffer_allocation in self.grids.values() {
+  fn new() -> Self {
+    Self {
+      grid_transforms: HashMap::default(),
+      grid_uv_buffers: HashMap::default()
+    }
+  }
+
+  pub(crate) fn destroy(&self, allocator: &Allocator) {
+    for buffer_allocation in self.grid_uv_buffers.values() {
       unsafe { buffer_allocation.destroy(allocator) };
     }
   }

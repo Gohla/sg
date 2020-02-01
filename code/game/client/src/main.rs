@@ -4,6 +4,7 @@ use std::thread;
 
 use anyhow::{Context, Result};
 use log::debug;
+use ultraviolet::Vec3;
 use winit::event::VirtualKeyCode;
 
 use gfx::camera::CameraInput;
@@ -15,13 +16,11 @@ use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
 use os::input_sys::{OsInputSys, RawInput};
 use os::window::Window;
-use sim::{GridOrientation, GridPosition, InGrid, WorldDynamics, WorldTransform};
-use sim::legion_sim::Sim;
+use sim::prelude::*;
 use util::image::{Components, ImageData};
 use util::timing::Duration;
 
 use crate::timing::{FrameTime, FrameTimer, TickTimer};
-use ultraviolet::Vec3;
 
 pub mod timing;
 
@@ -79,8 +78,8 @@ fn init_sim(sim: &mut Sim) -> Result<TextureDefBuilder> {
   let tex3 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
 
   let world = &mut sim.world;
-  let grid = world.insert((), vec![
-    (WorldTransform::new(0.0, 0.0, 0.0), WorldDynamics::new(0.0, 0.0, 0.0)),
+  let grid = world.insert((Grid, ), vec![
+    (WorldTransform::new(0.0, 0.0, 0.0), WorldDynamics::new(0.001, 0.001, 0.001)),
   ])[0];
 
   world.insert((InGrid::new(grid), ), vec![
