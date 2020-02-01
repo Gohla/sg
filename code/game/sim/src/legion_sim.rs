@@ -15,7 +15,7 @@ impl Sim {
     Self { world }
   }
 
-  pub fn simulate(&mut self, _time_step: Duration) {
+  pub fn simulate_tick(&mut self, _time_step: Duration) {
     let dynamics_query = <(Read<WorldDynamics>, Write<WorldTransform>)>::query();
     for i in dynamics_query.iter_mut(&mut self.world) {
       let (dynamics, mut transform): (Ref<WorldDynamics>, RefMut<WorldTransform>) = i;

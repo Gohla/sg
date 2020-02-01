@@ -4,25 +4,23 @@ use std::thread;
 
 use anyhow::{Context, Result};
 use log::debug;
-use ultraviolet::Vec3;
-use winit::event::VirtualKeyCode;
 
-use gfx::camera::CameraInput;
 use gfx::Gfx;
-use gfx::grid_renderer::GridTileRender;
-use gfx::texture_def::TextureDefBuilder;
 use math::prelude::*;
 use os::context::OsContext;
 use os::event_sys::{OsEvent, OsEventSys};
-use os::input_sys::{OsInputSys, RawInput};
+use os::input_sys::{OsInputSys};
 use os::window::Window;
 use sim::prelude::*;
-use util::image::{Components, ImageData};
 use util::timing::Duration;
 
+use crate::game::{Game, GameDef};
+use crate::input::Input;
 use crate::timing::{FrameTime, FrameTimer, TickTimer};
 
 pub mod timing;
+pub mod input;
+pub mod game;
 
 fn main() -> Result<()> {
   // Initialize logger.
@@ -40,10 +38,13 @@ fn main() -> Result<()> {
     let input_sys = OsInputSys::new(input_event_rx);
     (event_sys, event_rx, input_sys)
   };
+
+  // Initialize game definition.
+  let (game_def, texture_def_builder) = GameDef::new()
+    .with_context(|| "Failed to initialize game definition")?;
+
   // Initialize simulation.
   let mut sim = Sim::new();
-  let texture_def_builder = init_sim(&mut sim)
-    .with_context(|| "Failed to initialize game")?;
   // Initialize graphics.
   let mut gfx = Gfx::new(
     cfg!(debug_assertions),
@@ -52,13 +53,16 @@ fn main() -> Result<()> {
     window.window_inner_size(),
     texture_def_builder,
   ).with_context(|| "Failed to create GFX instance")?;
-  init_gfx(&mut gfx);
+
+  // Initialize game.
+  let game = Game::new(game_def, &mut sim, &mut gfx);
+
   // Spawn game thread and run OS event loop.
   let game_thread = thread::Builder::new()
     .name("Game".to_string())
     .spawn(move || {
       debug!("Game thread started");
-      run(window, os_event_rx, os_input_sys, sim, gfx)
+      run(window, os_event_rx, os_input_sys, sim, gfx, game)
         .with_context(|| "Game thread stopped with an error").unwrap();
       debug!("Game thread stopped");
     })
@@ -71,35 +75,7 @@ fn main() -> Result<()> {
   Ok(())
 }
 
-fn init_sim(sim: &mut Sim) -> Result<TextureDefBuilder> {
-  let mut texture_def_builder = TextureDefBuilder::new();
-  let tex1 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/dark.png"), Some(Components::Components4))?);
-  let tex2 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/light.png"), Some(Components::Components4))?);
-  let tex3 = texture_def_builder.add_texture(ImageData::from_encoded(include_bytes!("../../../../asset/wall_tile/green.png"), Some(Components::Components4))?);
-
-  let world = &mut sim.world;
-  let grid = world.insert((Grid, ), vec![
-    (WorldTransform::new(0.0, 0.0, 0.0), WorldDynamics::new(0.001, 0.001, 0.001)),
-  ])[0];
-
-  world.insert((InGrid::new(grid), ), vec![
-    (GridPosition::new(0, 0), GridOrientation::default(), GridTileRender(tex1)),
-    (GridPosition::new(-1, 0), GridOrientation::default(), GridTileRender(tex2)),
-    (GridPosition::new(0, -1), GridOrientation::default(), GridTileRender(tex1)),
-    (GridPosition::new(-1, -1), GridOrientation::default(), GridTileRender(tex1)),
-    (GridPosition::new(0, 7), GridOrientation::default(), GridTileRender(tex2)),
-    (GridPosition::new(0, 8), GridOrientation::default(), GridTileRender(tex3)),
-  ]);
-
-  Ok(texture_def_builder)
-}
-
-fn init_gfx(gfx: &mut Gfx) {
-  gfx.camera_sys.set_position(Vec3::new(-0.5, -0.5, 1.0));
-  gfx.camera_sys.set_zoom(33.0);
-}
-
-fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInputSys, mut sim: Sim, mut gfx: Gfx) -> Result<()> {
+fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInputSys, mut sim: Sim, mut gfx: Gfx, mut game: Game) -> Result<()> {
   let mut frame_timer = FrameTimer::new();
   let mut tick_timer = TickTimer::new(Duration::from_ns(16_666_667));
   'main: loop {
@@ -117,12 +93,13 @@ fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInpu
     }
     // Process input
     let raw_input = os_input_sys.update();
-    let camera_input = raw_input_to_camera_input(raw_input);
+    let Input { game: game_input, camera: camera_input } = Input::from_raw(raw_input);
     // Simulate tick
     if tick_timer.should_tick() {
       while tick_timer.should_tick() { // Run simulation.
         tick_timer.tick_start();
-        sim.simulate(tick_timer.time_target());
+        game.simulate_tick(game_input, &mut sim, &mut gfx);
+        sim.simulate_tick(tick_timer.time_target());
         tick_timer.tick_end();
       }
     }
@@ -131,16 +108,4 @@ fn run(_window: Window, os_event_rx: Receiver<OsEvent>, mut os_input_sys: OsInpu
   }
 
   Ok(gfx.wait_idle()?)
-}
-
-fn raw_input_to_camera_input(input: RawInput) -> CameraInput {
-  CameraInput {
-    move_up: input.is_key_down(VirtualKeyCode::W),
-    move_right: input.is_key_down(VirtualKeyCode::D),
-    move_down: input.is_key_down(VirtualKeyCode::S),
-    move_left: input.is_key_down(VirtualKeyCode::A),
-    zoom_delta: input.mouse_wheel_delta.y as f32,
-    drag: input.mouse_buttons.right,
-    drag_pos: input.mouse_pos,
-  }
 }

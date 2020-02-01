@@ -138,7 +138,7 @@ impl CameraSys {
   }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct CameraInput {
   // Keyboard movement.
   pub move_up: bool,
