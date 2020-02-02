@@ -1,5 +1,5 @@
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem::size_of;
 
 use anyhow::Result;
@@ -15,6 +15,7 @@ use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
 
 use crate::texture_def::{TextureDef, TextureIdx};
+use std::iter::FromIterator;
 
 // Grid length/count constants
 
@@ -247,6 +248,9 @@ impl GridRendererSys {
     }
     entity_command_buffer.write(world);
 
+    // Keep set of buffers to remove.
+    let mut remove_buffers: HashSet<(InGrid, InGridChunk), _> = HashSet::from_iter(render_state.grid_uv_buffers.keys());
+
     // Update chunk buffers with texture UVs.
     // OPTO: reuse query?
     let update_query = <(Read<GridChunkIndex>, Read<GridOrientation>, Read<GridTileRender>)>::query()
@@ -254,24 +258,28 @@ impl GridRendererSys {
     for chunk in update_query.iter_chunks(world) {
       let in_grid: &InGrid = chunk.tag().unwrap();
       let grid_chunk: &InGridChunk = chunk.tag().unwrap();
-      let buffer_allocation = match render_state.grid_uv_buffers.entry((*in_grid, *grid_chunk)) {
-        Entry::Occupied(e) => {
-          e.into_mut()
-        }
-        Entry::Vacant(e) => {
-          let buffer_allocation = unsafe {
-            let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
-            allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
-            allocator.flush_allocation(&allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
-            allocation
-          };
-          e.insert(buffer_allocation)
-        }
-      };
-
+      let map_key = (*in_grid, *grid_chunk);
+      remove_buffers.remove(*map_key); // Keep buffer by removing it from the remove set.
 
       {
-        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(buffer_allocation.info.get_mapped_data() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
+        let buffer_allocation = match render_state.grid_uv_buffers.entry(map_key) {
+          Entry::Occupied(e) => {
+            e.into_mut()
+          }
+          Entry::Vacant(e) => {
+            let buffer_allocation = unsafe {
+              let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
+              allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
+              allocator.flush_allocation(&allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
+              allocation
+            };
+            e.insert(buffer_allocation)
+          }
+        };
+
+        let mapped = unsafe { buffer_allocation.get_mapped_data() }.unwrap();
+        unsafe { mapped.copy_zeroes(TextureUVVertexData::uv_size()); }
+        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(mapped.ptr() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
         let indices = chunk.components::<GridChunkIndex>().unwrap();
         let orientations = chunk.components::<GridOrientation>().unwrap();
         let renderers = chunk.components::<GridTileRender>().unwrap();
@@ -283,8 +291,15 @@ impl GridRendererSys {
           buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
           buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
           buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+          delete_buffer = false;
         }
         allocator.flush_allocation(&buffer_allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
+      }
+    }
+
+    for grid_key in remove_buffers {
+      if let Some(buffer_allocation) = render_state.grid_uv_buffers.get(&grid_key) {
+
       }
     }
 

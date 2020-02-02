@@ -1,4 +1,5 @@
 use anyhow::Result;
+use legion::prelude::{IntoQuery, Read, tag_value};
 use ultraviolet::{Isometry2, Rotor2, Vec2, Vec3};
 
 use gfx::Gfx;
@@ -73,34 +74,52 @@ pub struct GameDebugInput {
 
 impl Game {
   pub fn simulate_tick(&mut self, input: GameInput, sim: &mut Sim, _gfx: &mut Gfx, ) {
-    let mut grid_world_dynamics = sim.world.get_component_mut::<WorldDynamics>(self.grid).unwrap();
-    if input.debug.grid_linear_velocity_x_inc {
-      grid_world_dynamics.linear_velocity.x += 0.001;
-    }
-    if input.debug.grid_linear_velocity_x_dec {
-      grid_world_dynamics.linear_velocity.x -= 0.001;
-    }
-    if input.debug.grid_linear_velocity_y_inc {
-      grid_world_dynamics.linear_velocity.y += 0.001;
-    }
-    if input.debug.grid_linear_velocity_y_dec {
-      grid_world_dynamics.linear_velocity.y -= 0.001;
-    }
-    if input.debug.grid_angular_velocity_inc {
-      grid_world_dynamics.angular_velocity = grid_world_dynamics.angular_velocity * Rotor2::from_angle(0.01);
-    }
-    if input.debug.grid_angular_velocity_dec {
-      grid_world_dynamics.angular_velocity = grid_world_dynamics.angular_velocity * Rotor2::from_angle(-0.01);
+    {
+      let mut grid_world_dynamics = sim.world.get_component_mut::<WorldDynamics>(self.grid).unwrap();
+      if input.debug.grid_linear_velocity_x_inc {
+        grid_world_dynamics.linear_velocity.x += 0.001;
+      }
+      if input.debug.grid_linear_velocity_x_dec {
+        grid_world_dynamics.linear_velocity.x -= 0.001;
+      }
+      if input.debug.grid_linear_velocity_y_inc {
+        grid_world_dynamics.linear_velocity.y += 0.001;
+      }
+      if input.debug.grid_linear_velocity_y_dec {
+        grid_world_dynamics.linear_velocity.y -= 0.001;
+      }
+      if input.debug.grid_angular_velocity_inc {
+        grid_world_dynamics.angular_velocity = grid_world_dynamics.angular_velocity * Rotor2::from_angle(0.01);
+      }
+      if input.debug.grid_angular_velocity_dec {
+        grid_world_dynamics.angular_velocity = grid_world_dynamics.angular_velocity * Rotor2::from_angle(-0.01);
+      }
     }
     if input.debug.grid_randomize {
-      // TODO:
+      self.clear_grid_tiles(sim);
     }
     if input.debug.grid_reset {
-      grid_world_dynamics.linear_velocity = Vec2::zero();
-      grid_world_dynamics.angular_velocity = Rotor2::identity();
-      drop(grid_world_dynamics);
-      let mut grid_world_transform = sim.world.get_component_mut::<WorldTransform>(self.grid).unwrap();
-      grid_world_transform.isometry = Isometry2::identity();
+      {
+        let mut grid_world_dynamics = sim.world.get_component_mut::<WorldDynamics>(self.grid).unwrap();
+        grid_world_dynamics.linear_velocity = Vec2::zero();
+        grid_world_dynamics.angular_velocity = Rotor2::identity();
+      }
+      {
+        let mut grid_world_transform = sim.world.get_component_mut::<WorldTransform>(self.grid).unwrap();
+        grid_world_transform.isometry = Isometry2::identity();
+      }
+      self.clear_grid_tiles(sim);
     }
+  }
+
+  fn clear_grid_tiles(&mut self, sim: &mut Sim) {
+    let mut command_buffer = legion::command::CommandBuffer::new(&sim.world);
+    let in_grid = InGrid::new(self.grid);
+    let query = Read::<GridPosition>::query().filter(tag_value::<InGrid>(&in_grid));
+    for (entity, _) in query.iter_entities(&sim.world) {
+      dbg!(entity);
+      command_buffer.delete(entity);
+    }
+    command_buffer.write(&mut sim.world);
   }
 }

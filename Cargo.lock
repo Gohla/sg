@@ -161,6 +161,7 @@ dependencies = [
  "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "ash 0.29.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx 0.1.0",
+ "legion 0.2.1 (git+https://github.com/Veykril/legion.git?branch=typed_indices)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "math 0.1.0",
  "os 0.1.0",

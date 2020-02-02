@@ -14,6 +14,7 @@ math = {path = "../../core/math"}
 util = {path = "../../core/util"}
 ash = "0.29"
 winit = "0.20"
+legion = "0.2"
 ultraviolet = "0.4"
 rand = "0.7"
 log = "0.4"
