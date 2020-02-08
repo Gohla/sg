@@ -249,7 +249,7 @@ impl GridRendererSys {
     entity_command_buffer.write(world);
 
     // Keep set of buffers to remove.
-    let mut remove_buffers: HashSet<(InGrid, InGridChunk), _> = HashSet::from_iter(render_state.grid_uv_buffers.keys());
+    let mut remove_buffers: HashSet<(InGrid, InGridChunk)> = HashSet::from_iter(render_state.grid_uv_buffers.keys().copied());
 
     // Update chunk buffers with texture UVs.
     // OPTO: reuse query?
@@ -259,7 +259,7 @@ impl GridRendererSys {
       let in_grid: &InGrid = chunk.tag().unwrap();
       let grid_chunk: &InGridChunk = chunk.tag().unwrap();
       let map_key = (*in_grid, *grid_chunk);
-      remove_buffers.remove(*map_key); // Keep buffer by removing it from the remove set.
+      remove_buffers.remove(&map_key); // Keep buffer by removing it from the remove set.
 
       {
         let buffer_allocation = match render_state.grid_uv_buffers.entry(map_key) {
@@ -291,15 +291,14 @@ impl GridRendererSys {
           buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
           buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
           buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
-          delete_buffer = false;
         }
         allocator.flush_allocation(&buffer_allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
       }
     }
 
     for grid_key in remove_buffers {
-      if let Some(buffer_allocation) = render_state.grid_uv_buffers.get(&grid_key) {
-
+      if let Some(buffer_allocation) = render_state.grid_uv_buffers.remove(&grid_key) {
+        unsafe { buffer_allocation.destroy(allocator); }
       }
     }
 

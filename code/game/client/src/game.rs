@@ -1,5 +1,6 @@
 use anyhow::Result;
 use legion::prelude::{IntoQuery, Read, tag_value};
+use rand::Rng;
 use ultraviolet::{Isometry2, Rotor2, Vec2, Vec3};
 
 use gfx::Gfx;
@@ -24,7 +25,7 @@ impl GameDef {
 }
 
 pub struct Game {
-  _game_def: GameDef,
+  game_def: GameDef,
   grid: Entity,
 }
 
@@ -51,7 +52,7 @@ impl Game {
     gfx.camera_sys.set_position(Vec3::new(-0.5, -0.5, 1.0));
     gfx.camera_sys.set_zoom(33.0);
 
-    Self { _game_def: game_def, grid }
+    Self { game_def, grid }
   }
 }
 
@@ -96,7 +97,23 @@ impl Game {
       }
     }
     if input.debug.grid_randomize {
+      use rand::seq::SliceRandom;
+
       self.clear_grid_tiles(sim);
+      let mut rng = rand::thread_rng();
+      let lower_bound = rng.gen_range(-100, 0);
+      let upper_bound = rng.gen_range(0, 100);
+      let mut command_buffer = legion::command::CommandBuffer::new(&sim.world);
+      for y in lower_bound..upper_bound {
+        for x in lower_bound..upper_bound {
+          if let Some(texture_idx) = self.game_def.grid_tile_textures.choose(&mut rng) {
+            command_buffer.insert((InGrid::new(self.grid), ), vec![
+              (GridPosition::new(x, y), GridOrientation::default(), GridTileRender(*texture_idx)),
+            ]);
+          }
+        }
+      }
+      command_buffer.write(&mut sim.world);
     }
     if input.debug.grid_reset {
       {
@@ -117,7 +134,6 @@ impl Game {
     let in_grid = InGrid::new(self.grid);
     let query = Read::<GridPosition>::query().filter(tag_value::<InGrid>(&in_grid));
     for (entity, _) in query.iter_entities(&sim.world) {
-      dbg!(entity);
       command_buffer.delete(entity);
     }
     command_buffer.write(&mut sim.world);
