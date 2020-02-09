@@ -1,21 +1,26 @@
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
+use std::iter::FromIterator;
 use std::mem::size_of;
+use std::time::Instant;
 
 use anyhow::Result;
 use ash::version::DeviceV1_0;
 use ash::vk;
 use itertools::izip;
+use legion::prelude::{Query, Read, Tagged};
 use legion::world::World;
+use metrics::timing;
 use ultraviolet::{Mat4, Vec2};
 
 use sim::prelude::*;
 use util::idx_assigner::Item;
 use vkw::prelude::*;
 use vkw::shader::ShaderModuleEx;
+use legion::filter::EntityFilterTuple;
+use legion::filter::Passthrough;
 
 use crate::texture_def::{TextureDef, TextureIdx};
-use std::iter::FromIterator;
 
 // Grid length/count constants
 
@@ -225,100 +230,142 @@ impl GridRendererSys {
     use legion::prelude::*;
 
     // Update grid transforms
-    let grid_transform_query = Read::<WorldTransform>::query()
-      .filter(tag::<Grid>());
-    for i in grid_transform_query.iter_entities(world) {
-      let (entity, transform): (_, Ref<WorldTransform>) = i;
-      render_state.grid_transforms.insert(entity, *transform);
+    {
+      let start = Instant::now();
+      let grid_transform_query = Read::<WorldTransform>::query()
+        .filter(tag::<Grid>() /*& changed::<WorldTransform>()*/);
+      for i in grid_transform_query.iter_entities(world) {
+        let (entity, transform): (_, Ref<WorldTransform>) = i;
+        render_state.grid_transforms.insert(entity, *transform);
+      }
+      timing!("gfx.grid_renderer.render.update_grid_transforms", start.elapsed());
+    }
+
+    // Assign initial chunk and chunk position for new grid tile entities.
+    {
+      let start = Instant::now();
+      let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
+      let query = Read::<GridPosition>::query()
+        .filter(!tag::<InGridChunk>() & component::<GridTileRender>());
+      for i in query.iter_entities(world) {
+        let (entity, pos): (_, Ref<GridPosition>) = i;
+        let in_grid_chunk = InGridChunk::from_grid_position(&pos);
+        // OPTO: initialize grid tile entities with an InGridChunk tag to prevent copy into new archetype chunk.
+        entity_command_buffer.add_tag(entity, in_grid_chunk);
+        let grid_chunk_index = GridChunkIndex::from_grid_position(&pos);
+        // OPTO: initialize grid tile entities with a GridChunkIndex component to prevent copy into new archetype chunk.
+        entity_command_buffer.add_component(entity, grid_chunk_index);
+      }
+      entity_command_buffer.write(world);
+      timing!("gfx.grid_renderer.render.assign_initial_chunk_for_grid_tile_entities", start.elapsed());
     }
 
     // Set chunk tags of grid tile entities, and set their index in grid-chunk-space.
-    let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
-    // OPTO: reuse query such that changed filter works?
-    let chunk_query = Read::<GridPosition>::query()
-      .filter(tag::<InGrid>() & component::<GridTileRender>());
-    for i in chunk_query.iter_entities(world) {
-      let (entity, pos): (_, Ref<GridPosition>) = i;
-      let in_grid_chunk = InGridChunk::from_grid_position(&pos);
-      // OPTO: initialize grid tile entities with an InGridChunk tag to prevent copy into new archetype chunk.
-      entity_command_buffer.add_tag(entity, in_grid_chunk);
-      let grid_chunk_position = GridChunkIndex::from_grid_position(&pos);
-      // OPTO: initialize grid tile entities with a GridChunkPosition component to prevent copy into new archetype chunk.
-      entity_command_buffer.add_component(entity, grid_chunk_position);
+    {
+      let start = Instant::now();
+      let mut entity_command_buffer = legion::command::CommandBuffer::new(world);
+      for i in render_state.grid_chunk_update_query.iter_entities(world) {
+        let (entity, (pos, grid_chunk)): (_, (Ref<GridPosition>, &InGridChunk)) = i;
+        let new_grid_chunk = InGridChunk::from_grid_position(&pos);
+        if new_grid_chunk != *grid_chunk {
+          entity_command_buffer.add_tag(entity, new_grid_chunk);
+        }
+        let grid_chunk_index = GridChunkIndex::from_grid_position(&pos);
+        entity_command_buffer.add_component(entity, grid_chunk_index);
+      }
+      entity_command_buffer.write(world);
+      timing!("gfx.grid_renderer.render.update_chunk_for_grid_tile_entities", start.elapsed());
     }
-    entity_command_buffer.write(world);
 
     // Keep set of buffers to remove.
-    let mut remove_buffers: HashSet<(InGrid, InGridChunk)> = HashSet::from_iter(render_state.grid_uv_buffers.keys().copied());
+    let mut remove_buffers = {
+      let start = Instant::now();
+      let remove_buffers: HashSet<(InGrid, InGridChunk)> = HashSet::from_iter(render_state.grid_uv_buffers.keys().copied());
+      timing!("gfx.grid_renderer.render.copy_uv_chunk_buffer_keys", start.elapsed());
+      remove_buffers
+    };
 
     // Update chunk buffers with texture UVs.
-    // OPTO: reuse query?
-    let update_query = <(Read<GridChunkIndex>, Read<GridOrientation>, Read<GridTileRender>)>::query()
-      .filter(tag::<InGrid>() & tag::<InGridChunk>());
-    for chunk in update_query.iter_chunks(world) {
-      let in_grid: &InGrid = chunk.tag().unwrap();
-      let grid_chunk: &InGridChunk = chunk.tag().unwrap();
-      let map_key = (*in_grid, *grid_chunk);
-      remove_buffers.remove(&map_key); // Keep buffer by removing it from the remove set.
+    {
+      let start = Instant::now();
+      // OPTO: reuse query?
+      let update_query = <(Read<GridChunkIndex>, Read<GridOrientation>, Read<GridTileRender>)>::query()
+        .filter(tag::<InGrid>() & tag::<InGridChunk>());
+      for chunk in update_query.iter_chunks(world) {
+        let in_grid: &InGrid = chunk.tag().unwrap();
+        let grid_chunk: &InGridChunk = chunk.tag().unwrap();
+        let map_key = (*in_grid, *grid_chunk);
+        remove_buffers.remove(&map_key); // Keep buffer by removing it from the remove set.
 
-      {
-        let buffer_allocation = match render_state.grid_uv_buffers.entry(map_key) {
-          Entry::Occupied(e) => {
-            e.into_mut()
-          }
-          Entry::Vacant(e) => {
-            let buffer_allocation = unsafe {
-              let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
-              allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
-              allocator.flush_allocation(&allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
-              allocation
-            };
-            e.insert(buffer_allocation)
-          }
-        };
+        {
+          let buffer_allocation = match render_state.grid_uv_buffers.entry(map_key) {
+            Entry::Occupied(e) => {
+              e.into_mut()
+            }
+            Entry::Vacant(e) => {
+              let buffer_allocation = unsafe {
+                let allocation = allocator.create_cpugpu_vertex_buffer_mapped(TextureUVVertexData::uv_size())?;
+                allocation.get_mapped_data().unwrap().copy_zeroes(TextureUVVertexData::uv_size());
+                allocator.flush_allocation(&allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
+                allocation
+              };
+              e.insert(buffer_allocation)
+            }
+          };
 
-        let mapped = unsafe { buffer_allocation.get_mapped_data() }.unwrap();
-        unsafe { mapped.copy_zeroes(TextureUVVertexData::uv_size()); }
-        let buffer_slice = unsafe { std::slice::from_raw_parts_mut(mapped.ptr() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
-        let indices = chunk.components::<GridChunkIndex>().unwrap();
-        let orientations = chunk.components::<GridOrientation>().unwrap();
-        let renderers = chunk.components::<GridTileRender>().unwrap();
-        for (index, _orientation, render) in izip!(indices.iter(), orientations.iter(), renderers.iter()) {
-          let texture_index = render.0.into_idx() as f32;
-          let slice_index = index.0 as usize * 4;
-          // OPTO: use memcpy?
-          buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
-          buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
-          buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
-          buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+          let mapped = unsafe { buffer_allocation.get_mapped_data() }.unwrap();
+          unsafe { mapped.copy_zeroes(TextureUVVertexData::uv_size()); }
+          let buffer_slice = unsafe { std::slice::from_raw_parts_mut(mapped.ptr() as *mut TextureUVVertexData, TextureUVVertexData::uv_count()) };
+          let indices = chunk.components::<GridChunkIndex>().unwrap();
+          let orientations = chunk.components::<GridOrientation>().unwrap();
+          let renderers = chunk.components::<GridTileRender>().unwrap();
+          for (index, _orientation, render) in izip!(indices.iter(), orientations.iter(), renderers.iter()) {
+            let texture_index = render.0.into_idx() as f32;
+            let slice_index = index.0 as usize * 4;
+            // OPTO: use memcpy?
+            buffer_slice[slice_index + 0] = TextureUVVertexData::new(0.0, 1.0, texture_index);
+            buffer_slice[slice_index + 1] = TextureUVVertexData::new(1.0, 1.0, texture_index);
+            buffer_slice[slice_index + 2] = TextureUVVertexData::new(0.0, 0.0, texture_index);
+            buffer_slice[slice_index + 3] = TextureUVVertexData::new(1.0, 0.0, texture_index);
+          }
+          allocator.flush_allocation(&buffer_allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
         }
-        allocator.flush_allocation(&buffer_allocation.allocation, 0, ash::vk::WHOLE_SIZE as usize)?;
       }
+      timing!("gfx.grid_renderer.render.update_uv_buffers", start.elapsed());
     }
 
-    for grid_key in remove_buffers {
-      if let Some(buffer_allocation) = render_state.grid_uv_buffers.remove(&grid_key) {
-        unsafe { buffer_allocation.destroy(allocator); }
+    // Remove buffers that are not needed any more.
+    {
+      let start = Instant::now();
+      for grid_key in remove_buffers {
+        if let Some(buffer_allocation) = render_state.grid_uv_buffers.remove(&grid_key) {
+          unsafe { buffer_allocation.destroy(allocator); }
+        }
       }
+      timing!("gfx.grid_renderer.render.remove_unused_uv_buffer", start.elapsed());
     }
 
     // Issue bind and draw commands.
-    unsafe {
-      device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
-      device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
-      device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
-      device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
-      for ((in_grid, in_grid_chunk), buffer_allocation) in render_state.grid_uv_buffers.iter() {
-        if let Some(world_transform) = render_state.grid_transforms.get(&in_grid.grid) {
-          let mut isometry = world_transform.isometry;
-          isometry.prepend_translation(Vec2::new(in_grid_chunk.x as f32 * GRID_LENGTH_F32, in_grid_chunk.y as f32 * GRID_LENGTH_F32));
-          let model = Mat4::from_translation(isometry.translation.into_homogeneous_vector()) * isometry.rotation.into_matrix().into_homogeneous().into_homogeneous();
-          let mvp_uniform_data = MVPUniformData(view_projection * model);
-          device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
-          device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
-          device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);
+    {
+      let start = Instant::now();
+      unsafe {
+        device.cmd_bind_pipeline(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline);
+        device.cmd_bind_vertex_buffers(command_buffer, 0, &[self.quads_vertex_buffer.buffer], &[0]);
+        device.cmd_bind_index_buffer(command_buffer, self.quads_index_buffer.buffer, 0, QuadsIndexData::index_type());
+        device.cmd_bind_descriptor_sets(command_buffer, PipelineBindPoint::GRAPHICS, self.pipeline_layout, 0, &[texture_def.descriptor_set], &[]);
+        for ((in_grid, in_grid_chunk), buffer_allocation) in render_state.grid_uv_buffers.iter() {
+          if let Some(world_transform) = render_state.grid_transforms.get(&in_grid.grid) {
+            let mut isometry = world_transform.isometry;
+            isometry.prepend_translation(Vec2::new(in_grid_chunk.x as f32 * GRID_LENGTH_F32, in_grid_chunk.y as f32 * GRID_LENGTH_F32));
+            let model = Mat4::from_translation(isometry.translation.into_homogeneous_vector()) * isometry.rotation.into_matrix().into_homogeneous().into_homogeneous();
+            let mvp_uniform_data = MVPUniformData(view_projection * model);
+            device.cmd_push_constants(command_buffer, self.pipeline_layout, ShaderStageFlags::VERTEX, 0, mvp_uniform_data.as_bytes());
+            device.cmd_bind_vertex_buffers(command_buffer, 1, &[buffer_allocation.buffer], &[0]);
+            device.cmd_draw_indexed(command_buffer, QuadsIndexData::index_count() as u32, 1, 0, 0, 0);
+          }
         }
       }
+      timing!("gfx.grid_renderer.render.issue_draw_commands", start.elapsed());
     }
 
     Ok(())
@@ -341,13 +388,18 @@ impl GridRendererSys {
 pub struct GridRenderState {
   grid_transforms: HashMap<Entity, WorldTransform>,
   grid_uv_buffers: HashMap<(InGrid, InGridChunk), BufferAllocation>,
+  grid_chunk_update_query: Query<(Read<GridPosition>, Tagged<InGridChunk>), legion::filter::EntityFilterTuple<legion::filter::And<(legion::filter::ComponentFilter<GridPosition>, legion::filter::TagFilter<InGridChunk>, legion::filter::And<(legion::filter::TagFilter<InGrid>, legion::filter::TagFilter<InGridChunk>, legion::filter::ComponentFilter<GridTileRender>, legion::filter::ComponentFilter<GridPosition>)>)>, legion::filter::And<(legion::filter::Passthrough, legion::filter::Passthrough)>, legion::filter::And<(legion::filter::Passthrough, legion::filter::Passthrough, legion::filter::ComponentChangedFilter<GridPosition>)>>>,
 }
 
 impl GridRenderState {
   fn new() -> Self {
+    use legion::prelude::*;
+    let grid_chunk_update_query = <(Read<GridPosition>, Tagged<InGridChunk>)>::query()
+      .filter(tag::<InGrid>() & tag::<InGridChunk>() & component::<GridTileRender>() & changed::<GridPosition>());
     Self {
       grid_transforms: HashMap::default(),
-      grid_uv_buffers: HashMap::default()
+      grid_uv_buffers: HashMap::default(),
+      grid_chunk_update_query,
     }
   }
 

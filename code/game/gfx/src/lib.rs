@@ -10,7 +10,6 @@ use log::debug;
 use raw_window_handle::RawWindowHandle;
 
 use math::prelude::*;
-use util::timing::Duration;
 use vkw::entry::Entry;
 use vkw::framebuffer::FramebufferCreateError;
 use vkw::prelude::*;
@@ -18,6 +17,7 @@ use vkw::prelude::*;
 use crate::camera::{CameraInput, CameraSys};
 use crate::grid_renderer::{GridRendererSys, GridRenderState};
 use crate::texture_def::{TextureDef, TextureDefBuilder};
+use std::time::Duration;
 
 pub mod grid_renderer;
 pub mod texture_def;

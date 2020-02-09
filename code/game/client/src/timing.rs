@@ -1,4 +1,5 @@
-use util::timing::{Duration, Instant, Time, Timer};
+use util::timing::{Time, Timer};
+use std::time::{Duration, Instant};
 
 pub struct FrameTimer {
   timer: Timer,
@@ -37,7 +38,7 @@ impl TickTimer {
       tick: 0,
       start: Instant::now(),
       time_target: tick_time_target,
-      accumulated_lag: Duration::zero(),
+      accumulated_lag: Duration::default(),
     }
   }
 
@@ -48,7 +49,7 @@ impl TickTimer {
   }
 
   pub fn num_upcoming_ticks(&self) -> u64 {
-    (self.accumulated_lag / self.time_target).floor() as u64
+    (self.accumulated_lag.as_secs_f64() / self.time_target.as_secs_f64()).floor() as u64
   }
 
   pub fn should_tick(&self) -> bool {
@@ -63,7 +64,7 @@ impl TickTimer {
   pub fn tick_end(&mut self) -> Duration {
     self.tick += 1;
     self.accumulated_lag -= self.time_target;
-    self.start.to(Instant::now())
+    self.start.elapsed()
   }
 
 
@@ -76,8 +77,6 @@ impl TickTimer {
   }
 
   pub fn extrapolation(&self) -> f64 {
-    let lag_ns = self.accumulated_lag.as_ns();
-    let target_ns = self.time_target.as_ns();
-    lag_ns as f64 / target_ns as f64
+    self.accumulated_lag.as_secs_f64() / self.time_target.as_secs_f64()
   }
 }

@@ -2,7 +2,7 @@ use ultraviolet::{Mat4, Vec2, Vec3};
 use ultraviolet::projection;
 
 use math::screen::{PhysicalPosition, PhysicalSize};
-use util::timing::Duration;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub struct CameraSys {
@@ -87,7 +87,7 @@ impl CameraSys {
     input: CameraInput,
     frame_time: Duration,
   ) {
-    let pan_speed = self.pan_speed * frame_time.as_s() as f32;
+    let pan_speed = self.pan_speed * frame_time.as_secs_f32();
     let mag_speed = self.mag_speed;
     if input.move_up { self.position.y += pan_speed };
     if input.move_right { self.position.x += pan_speed };

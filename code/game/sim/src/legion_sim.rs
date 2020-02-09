@@ -1,7 +1,7 @@
+use std::time::Duration;
+
 use legion::borrow::{Ref, RefMut};
 use legion::prelude::*;
-
-use util::timing::Duration;
 
 use crate::components::{WorldDynamics, WorldTransform};
 

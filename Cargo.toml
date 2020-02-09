@@ -26,21 +26,21 @@ codegen-units = 8
 lto = false
 incremental = true
 # Fully optimize all dependencies, but not our own crates.
-[profile.dev.overrides."*"]
+[profile.dev.package."*"]
 opt-level = 3
-[profile.dev.overrides."sim"]
+[profile.dev.package."sim"]
 opt-level = 2
-[profile.dev.overrides."gfx"]
+[profile.dev.package."gfx"]
 opt-level = 2
-[profile.dev.overrides."client"]
+[profile.dev.package."client"]
 opt-level = 2
-[profile.dev.overrides."vkw"]
+[profile.dev.package."vkw"]
 opt-level = 2
-[profile.dev.overrides."math"]
+[profile.dev.package."math"]
 opt-level = 2
-[profile.dev.overrides."os"]
+[profile.dev.package."os"]
 opt-level = 2
-[profile.dev.overrides."util"]
+[profile.dev.package."util"]
 opt-level = 2
 
 # Release (builtin) profile: fastest runtime.
